@@ -18,6 +18,17 @@ function makeHolding(): PortfolioHolding {
   };
 }
 
+function makeHoldingWithCurrency(currency: string): PortfolioHolding {
+  return {
+    ...makeHolding(),
+    asset: {
+      ...makeHolding().asset,
+      symbol: 'INTL',
+      currency,
+    },
+  };
+}
+
 function makeReturns(startYear: number, years: number): MonthlyReturnPoint[] {
   const points: MonthlyReturnPoint[] = [];
   for (let m = 0; m <= years * 12; m++) {
@@ -95,6 +106,51 @@ describe('computeSWR', () => {
     );
 
     expect(result.sweepResults.map((row) => row.startDate)).toEqual(['2000-01', '2000-02']);
+  });
+
+  it('throws when SWR requires FX rates that were not provided', () => {
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('INTL', makeReturns(2000, 2));
+
+    expect(() => computeSWR(
+      [makeHoldingWithCurrency('EUR')],
+      assetReturns,
+      makeCpi(2000, 2),
+      {
+        retirementYears: 1,
+        initialCapital: 1000,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        displayCurrency: 'USD',
+        ratesToTest: [0.04],
+      },
+    )).toThrow('Missing FX rates for EURUSD required by SWR');
+  });
+
+  it('uses provided FX rates when simulating SWR periods', () => {
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('INTL', makeReturns(2000, 2));
+
+    const fxRates = new Map();
+    fxRates.set('EURUSD', makeReturns(2000, 2).map((point, index) => ({
+      date: point.date,
+      rate: index === 0 ? 1 : 1.10,
+    })));
+
+    const result = computeSWR(
+      [makeHoldingWithCurrency('EUR')],
+      assetReturns,
+      makeCpi(2000, 2),
+      {
+        retirementYears: 1,
+        initialCapital: 1000,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        displayCurrency: 'USD',
+        ratesToTest: [0.04],
+        fxRates,
+      },
+    );
+
+    expect(result.periodResults[0].finalBalance).toBeGreaterThan(1000);
   });
 
   it('marks a period failed when planned withdrawals are not fully applied', () => {

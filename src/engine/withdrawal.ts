@@ -11,6 +11,7 @@ import { runBacktest } from './backtest';
 import type {
   BacktestParameters,
   CashflowEvent,
+  MonthlyFxRatePoint,
   MonthlyReturnPoint,
   PortfolioHolding,
   RebalancingStrategy,
@@ -142,6 +143,7 @@ function simulateSinglePeriod(
   rebalancing: RebalancingStrategy,
   displayCurrency: DisplayCurrency,
   inflationRegion: Region,
+  fxRates: Map<string, MonthlyFxRatePoint[]>,
 ): SinglePeriodResult {
   const endDate = addYears(startDate, retirementYears);
 
@@ -173,7 +175,7 @@ function simulateSinglePeriod(
   };
 
   // Run backtest (no FX conversion needed for single-currency portfolios)
-  const result = runBacktest(params, assetReturns, new Map(), cpiSeries);
+  const result = runBacktest(params, assetReturns, fxRates, cpiSeries);
 
   // Extract withdrawal-specific results
   const timeSeries = result.timeSeries;
@@ -284,6 +286,7 @@ export function computeSWR(
     displayCurrency?: DisplayCurrency;
     inflationRegion?: Region;
     ratesToTest?: number[];
+    fxRates?: Map<string, MonthlyFxRatePoint[]>;
   },
 ): SWRResult {
   const {
@@ -293,7 +296,10 @@ export function computeSWR(
     displayCurrency = 'USD' as DisplayCurrency,
     inflationRegion = 'US' as Region,
     ratesToTest = DEFAULT_RATES,
+    fxRates = new Map<string, MonthlyFxRatePoint[]>(),
   } = options;
+
+  assertRequiredFxRates(holdings, displayCurrency, fxRates);
 
   const startDates = getStartDates(assetReturns, retirementYears);
 
@@ -314,6 +320,7 @@ export function computeSWR(
         rebalancing,
         displayCurrency,
         inflationRegion,
+        fxRates,
       );
 
       if (periodResult.success) { /* tracked in sweepResults below */ }
@@ -387,4 +394,19 @@ export function computeSWR(
     periodResults: allPeriodResults,
     sweepResults,
   };
+}
+
+function assertRequiredFxRates(
+  holdings: PortfolioHolding[],
+  displayCurrency: DisplayCurrency,
+  fxRates: Map<string, MonthlyFxRatePoint[]>,
+): void {
+  for (const holding of holdings) {
+    if (holding.asset.currency === displayCurrency) continue;
+
+    const pair = `${holding.asset.currency}${displayCurrency}`;
+    if (!fxRates.has(pair)) {
+      throw new Error(`Missing FX rates for ${pair} required by SWR`);
+    }
+  }
 }

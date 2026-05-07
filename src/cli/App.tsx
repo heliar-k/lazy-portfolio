@@ -445,7 +445,7 @@ export default function App() {
     setTimeout(() => {
       try {
         const region = CURRENCY_REGION[currency] ?? 'US';
-        const { assetReturns, cpiSeries } = resolvePortfolioData(
+        const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
           portfolio.holdings, currency, region, true,
         );
         const years = parseInt(retirementYears) || 30;
@@ -455,6 +455,7 @@ export default function App() {
           rebalancing: parseRebalancing(rebalancing),
           displayCurrency: currency,
           inflationRegion: region as BacktestParameters['inflationRegion'],
+          fxRates,
         });
         setSwrResult(r);
         setSwrTab('summary');
