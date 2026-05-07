@@ -10,6 +10,7 @@ import { resolvePortfolioData } from './data-resolver.js';
 import { runBacktest } from '../engine/backtest.js';
 import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
 import { computeSWR } from '../engine/withdrawal.js';
+import { loadCustomPortfolios, addCustomPortfolio, deleteCustomPortfolio } from './custom-store.js';
 import type {
   PortfolioDefinition,
   PortfolioHolding,
@@ -23,24 +24,23 @@ import type { EtfMapEntry } from './data-loader.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type AppMode = 'backtest' | 'compare' | 'swr';
-
 type View =
-  | 'mode'
+  | 'home'
+  | 'select'
   | 'add_type'
   | 'portfolio'
   | 'etf_select'
+  | 'manage'
   | 'custom_build'
   | 'custom_weight'
+  | 'custom_name'
   | 'params'
   | 'running'
   | 'results'
+  | 'compare_results'
   | 'swr_params'
   | 'swr_running'
-  | 'swr_results'
-  | 'compare_select'
-  | 'compare_running'
-  | 'compare_results';
+  | 'swr_results';
 
 type ResultTab = 'metrics' | 'chart' | 'annual' | 'holdings' | 'monte';
 type SWRTab = 'summary' | 'sweep' | 'periods';
@@ -91,34 +91,42 @@ const CURRENCY_REGION: Record<string, string> = {
   USD: 'US', CNY: 'CN', EUR: 'EU', JPY: 'JP', GBP: 'UK',
 };
 
+const ETF_CLASS_LABELS: Record<string, string> = {
+  us_large_cap: 'US Large Cap', us_small_cap: 'US Small/Mid Cap',
+  us_total_market: 'US Total Market', intl_developed: 'Intl Developed',
+  intl_emerging: 'Intl Emerging', us_agg_bond: 'US Aggregate Bond',
+  us_treasury_long: 'US Treasury Long', us_treasury_intermediate: 'US Treasury Intermediate',
+  us_treasury_short: 'US Treasury Short', global_agg_bond: 'Global Bond',
+  us_tips: 'US TIPS', us_reit: 'US REIT', us_cash: 'US Cash/Short-term',
+  gold: 'Gold', commodities: 'Commodities',
+};
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const { exit } = useApp();
 
-  const [mode, setMode] = useState<AppMode>('backtest');
-  const [view, setView] = useState<View>('mode');
-  const [portfolio, setPortfolio] = useState<PortfolioDefinition | null>(null);
-  const [result, setResult] = useState<BacktestResult | null>(null);
-  const [tab, setTab] = useState<ResultTab>('metrics');
+  const [view, setView] = useState<View>('home');
+  const [isSWRMode, setIsSWRMode] = useState(false);
   const [error, setError] = useState('');
+
+  // Portfolio selection (1–4 portfolios, unified for backtest & compare)
+  const [selectedPortfolios, setSelectedPortfolios] = useState<PortfolioDefinition[]>([]);
+  const [results, setResults] = useState<{ name: string; result: BacktestResult }[]>([]);
+  const [tab, setTab] = useState<ResultTab>('metrics');
+  const [compareTab, setCompareTab] = useState<CompareTab>('table');
 
   // SWR state
   const [swrResult, setSwrResult] = useState<SWRResult | null>(null);
   const [swrTab, setSwrTab] = useState<SWRTab>('summary');
   const [retirementYears, setRetirementYears] = useState('30');
 
-  // Compare state
-  const [comparePortfolios, setComparePortfolios] = useState<PortfolioDefinition[]>([]);
-  const [compareResults, setCompareResults] = useState<{ name: string; result: BacktestResult }[]>([]);
-  const [compareTab, setCompareTab] = useState<CompareTab>('table');
-  const [_compareStep, setCompareStep] = useState(0);
-
-  // Custom portfolio state
+  // Custom portfolio build state
   const [customHoldings, setCustomHoldings] = useState<PortfolioHolding[]>([]);
   const [pendingEtf, setPendingEtf] = useState<EtfMapEntry | null>(null);
   const [weightInput, setWeightInput] = useState('');
-  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [savedCustoms, setSavedCustoms] = useState<PortfolioDefinition[]>(() => loadCustomPortfolios());
 
   // Monte Carlo state
   const [mcYears, setMcYears] = useState(10);
@@ -135,14 +143,9 @@ export default function App() {
 
   // Data
   const etfMap = useMemo(() => loadEtfMap(), []);
-  const etfsWithProxy = useMemo(
-    () => etfMap.filter((e) => e.proxySymbol),
-    [etfMap],
-  );
-  const metadata = useMemo(
-    () => getTemplateMetadata().filter((t) => t.holdingCount > 0),
-    [],
-  );
+  const etfsWithProxy = useMemo(() => etfMap.filter((e) => e.proxySymbol), [etfMap]);
+  const metadata = useMemo(() => getTemplateMetadata().filter((t) => t.holdingCount > 0), []);
+
   const resolvePortfolio = (id: string): PortfolioDefinition | undefined => {
     const etfBySymbol = new Map<string, EtfMapEntry>(etfMap.map((e) => [e.symbol, e]));
     const all = getPortfolioTemplates((symbol) => {
@@ -175,63 +178,51 @@ export default function App() {
     tags: ['single-etf'],
   });
 
-  const customToPortfolio = (holdings: PortfolioHolding[]): PortfolioDefinition => ({
-    id: `custom_${holdings.map((h) => h.asset.symbol).join('_').toLowerCase()}`,
-    name: holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(' / '),
-    holdings,
-    tags: ['custom'],
-  });
-
-  const handlePortfolioSelected = (p: PortfolioDefinition) => {
-    if (mode === 'compare') {
-      if (comparePortfolios.some((cp) => cp.id === p.id)) {
-        setError(`"${p.name}" is already added`);
-        setView('compare_select');
-        return;
-      }
-      setError('');
-      setComparePortfolios((prev) => [...prev, p]);
-      setCompareStep((s) => s + 1);
-      setView('compare_select');
-    } else {
-      setPortfolio(p);
-      setParamStep(0);
-      setView('params');
+  const handlePortfolioAdded = (p: PortfolioDefinition) => {
+    if (selectedPortfolios.some((sp) => sp.id === p.id)) {
+      setError(`"${p.name}" is already added`);
+      setView('select');
+      return;
     }
+    setError('');
+    setSelectedPortfolios((prev) => [...prev, p]);
+    setView('select');
   };
 
-  const buildParams = (): BacktestParameters | null => {
-    if (!portfolio) return null;
-    const region = CURRENCY_REGION[currency] ?? 'US';
-    return {
-      portfolio,
-      startDate,
-      endDate,
-      initialCapital: parseFloat(capital) || 10000,
-      displayCurrency: currency,
-      inflationRegion: region as BacktestParameters['inflationRegion'],
-      inflationAdjusted: inflation,
-      rebalancing: parseRebalancing(rebalancing),
-      cashflows: [],
-    };
-  };
-
-  const doBacktest = () => {
-    const params = buildParams();
-    if (!params) return;
+  const doRun = () => {
+    if (selectedPortfolios.length === 0) return;
     setView('running');
     setError('');
 
     setTimeout(() => {
       try {
         const region = CURRENCY_REGION[currency] ?? 'US';
-        const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
-          params.portfolio.holdings, currency, region, inflation,
-        );
-        const r = runBacktest(params, assetReturns, fxRates, cpiSeries);
-        setResult(r);
-        setTab('metrics');
-        setView('results');
+        const allResults: { name: string; result: BacktestResult }[] = [];
+
+        for (const p of selectedPortfolios) {
+          const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
+            p.holdings, currency, region, inflation,
+          );
+          const params: BacktestParameters = {
+            portfolio: p, startDate, endDate,
+            initialCapital: parseFloat(capital) || 10000,
+            displayCurrency: currency,
+            inflationRegion: region as BacktestParameters['inflationRegion'],
+            inflationAdjusted: inflation,
+            rebalancing: parseRebalancing(rebalancing),
+            cashflows: [],
+          };
+          allResults.push({ name: p.name, result: runBacktest(params, assetReturns, fxRates, cpiSeries) });
+        }
+
+        setResults(allResults);
+        if (allResults.length === 1) {
+          setTab('metrics');
+          setView('results');
+        } else {
+          setCompareTab('table');
+          setView('compare_results');
+        }
       } catch (e: any) {
         setError(e.message ?? 'Backtest failed');
         setView('params');
@@ -240,7 +231,8 @@ export default function App() {
   };
 
   const doSWR = () => {
-    if (!portfolio) return;
+    if (selectedPortfolios.length === 0) return;
+    const portfolio = selectedPortfolios[0];
     setView('swr_running');
     setError('');
 
@@ -268,49 +260,12 @@ export default function App() {
     }, 10);
   };
 
-  const doCompare = () => {
-    if (comparePortfolios.length < 2) return;
-    setView('compare_running');
-    setError('');
-
-    setTimeout(() => {
-      try {
-        const region = CURRENCY_REGION[currency] ?? 'US';
-        const results: { name: string; result: BacktestResult }[] = [];
-
-        for (const p of comparePortfolios) {
-          const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
-            p.holdings, currency, region, inflation,
-          );
-          const params: BacktestParameters = {
-            portfolio: p,
-            startDate,
-            endDate,
-            initialCapital: parseFloat(capital) || 10000,
-            displayCurrency: currency,
-            inflationRegion: region as BacktestParameters['inflationRegion'],
-            inflationAdjusted: inflation,
-            rebalancing: parseRebalancing(rebalancing),
-            cashflows: [],
-          };
-          results.push({ name: p.name, result: runBacktest(params, assetReturns, fxRates, cpiSeries) });
-        }
-
-        setCompareResults(results);
-        setCompareTab('table');
-        setView('compare_results');
-      } catch (e: any) {
-        setError(e.message ?? 'Comparison failed');
-        setView('mode');
-      }
-    }, 10);
-  };
-
   // ─── Global keyboard ─────────────────────────────────────────────────────
 
   const isTextEditing = [1, 2, 3].includes(paramStep) && view === 'params';
   const isSWRTextEditing = view === 'swr_params';
   const isWeightEditing = view === 'custom_weight';
+  const isNameEditing = view === 'custom_name';
 
   useInput(
     (input, key) => {
@@ -328,32 +283,17 @@ export default function App() {
           const idx = RESULT_TABS.findIndex((t) => t.key === tab);
           setTab(RESULT_TABS[(idx - 1 + RESULT_TABS.length) % RESULT_TABS.length].key);
         } else if (input === 'p') {
-          setView('add_type');
+          setView('select');
         } else if (input === 's') {
           setParamStep(0);
           setView('params');
         } else if (input === 'r') {
-          doBacktest();
+          doRun();
         } else if (input === 'w') {
           setView('swr_params');
         } else if (tab === 'monte') {
           if (input === '+' || input === '=') setMcYears((y) => Math.min(y + 5, 30));
           if (input === '-') setMcYears((y) => Math.max(y - 5, 5));
-        }
-      }
-
-      if (view === 'swr_results') {
-        if (key.tab || input === 'l' || key.rightArrow) {
-          const idx = SWR_TABS.findIndex((t) => t.key === swrTab);
-          setSwrTab(SWR_TABS[(idx + 1) % SWR_TABS.length].key);
-        } else if (input === 'h' || key.leftArrow) {
-          const idx = SWR_TABS.findIndex((t) => t.key === swrTab);
-          setSwrTab(SWR_TABS[(idx - 1 + SWR_TABS.length) % SWR_TABS.length].key);
-        } else if (input === 'p') {
-          setView('add_type');
-        } else if (key.escape) {
-          if (result) setView('results');
-          else setView('mode');
         }
       }
 
@@ -364,34 +304,55 @@ export default function App() {
         } else if (input === 'h' || key.leftArrow) {
           const idx = COMPARE_TABS.findIndex((t) => t.key === compareTab);
           setCompareTab(COMPARE_TABS[(idx - 1 + COMPARE_TABS.length) % COMPARE_TABS.length].key);
+        } else if (input === 'p') {
+          setView('select');
+        } else if (input === 's') {
+          setParamStep(0);
+          setView('params');
+        } else if (input === 'r') {
+          doRun();
         } else if (key.escape) {
-          setView('mode');
+          setView('select');
+        }
+      }
+
+      if (view === 'swr_results') {
+        if (key.tab || input === 'l' || key.rightArrow) {
+          const idx = SWR_TABS.findIndex((t) => t.key === swrTab);
+          setSwrTab(SWR_TABS[(idx + 1) % SWR_TABS.length].key);
+        } else if (input === 'h' || key.leftArrow) {
+          const idx = SWR_TABS.findIndex((t) => t.key === swrTab);
+          setSwrTab(SWR_TABS[(idx - 1 + SWR_TABS.length) % SWR_TABS.length].key);
+        } else if (key.escape) {
+          if (results.length > 0) setView('results');
+          else setView('home');
         }
       }
 
       // Navigation
-      if (view === 'mode' && key.escape) {
-        if (result) setView('results');
+      if (view === 'home' && key.escape) {
+        if (results.length > 0) setView(results.length === 1 ? 'results' : 'compare_results');
+      }
+      if (view === 'select' && key.escape) {
+        setView('home');
       }
       if (view === 'add_type' && key.escape) {
-        if (mode === 'compare') setView('compare_select');
-        else setView('mode');
+        setView('select');
+      }
+      if (view === 'manage' && key.escape) {
+        setView('home');
       }
       if (view === 'custom_build' && key.escape) {
-        setView('add_type');
+        setView('manage');
       }
       if (view === 'custom_weight' && key.escape) {
         setView('etf_select');
       }
       if (view === 'params' && key.escape && !isTextEditing) {
-        if (result) setView('results');
-        else setView('add_type');
-      }
-      if (view === 'compare_select' && key.escape) {
-        setView('mode');
+        setView('select');
       }
     },
-    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !['running', 'swr_running', 'compare_running', 'portfolio', 'etf_select'].includes(view) },
+    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !isNameEditing && !['running', 'swr_running', 'portfolio', 'etf_select'].includes(view) },
   );
 
   const height = process.stdout.rows || 24;
@@ -403,40 +364,56 @@ export default function App() {
       {/* Header */}
       <Box borderStyle="single" paddingX={1}>
         <Text bold color="cyan">Lazy Portfolio Backtest</Text>
-        {portfolio && (
-          <Text>  ·  <Text bold>{portfolio.name}</Text>  ({portfolio.holdings.length} holdings)</Text>
+        {selectedPortfolios.length === 1 && (
+          <Text>  ·  <Text bold>{selectedPortfolios[0].name}</Text></Text>
+        )}
+        {selectedPortfolios.length > 1 && (
+          <Text>  ·  <Text bold>{selectedPortfolios.length} portfolios</Text></Text>
         )}
       </Box>
 
       {/* Main content */}
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        {view === 'mode' && (
-          <ModeView onSelect={(m) => {
-            setMode(m);
-            if (m === 'compare') {
-              setComparePortfolios([]);
-              setCompareStep(0);
-              setView('compare_select');
-            } else {
-              setView('add_type');
+        {view === 'home' && (
+          <HomeView onSelect={(action) => {
+            if (action === 'backtest') {
+              setIsSWRMode(false);
+              setSelectedPortfolios([]);
+              setView('select');
+            } else if (action === 'manage') {
+              setSavedCustoms(loadCustomPortfolios());
+              setView('manage');
+            } else if (action === 'swr') {
+              setIsSWRMode(true);
+              setSelectedPortfolios([]);
+              setView('select');
             }
           }} />
         )}
 
+        {view === 'select' && (
+          <SelectView
+            selected={selectedPortfolios}
+            isSWRMode={isSWRMode}
+            error={error}
+            onAdd={() => { setError(''); setView('add_type'); }}
+            onRemove={(i) => setSelectedPortfolios((prev) => prev.filter((_, idx) => idx !== i))}
+            onRun={() => { setParamStep(0); setView('params'); }}
+          />
+        )}
+
         {view === 'add_type' && (
-          <AddTypeView onSelect={(type) => {
-            if (type === 'template') {
-              setIsCustomMode(false);
-              setView('portfolio');
-            } else if (type === 'single_etf') {
-              setIsCustomMode(false);
-              setView('etf_select');
-            } else if (type === 'custom') {
-              setIsCustomMode(true);
-              setCustomHoldings([]);
-              setView('custom_build');
-            }
-          }} />
+          <AddTypeView
+            savedCount={savedCustoms.length}
+            onSelect={(type) => {
+              if (type === 'template') setView('portfolio');
+              else if (type === 'single_etf') setView('etf_select');
+              else if (type === 'saved') {
+                setSavedCustoms(loadCustomPortfolios());
+                setView('manage');
+              }
+            }}
+          />
         )}
 
         {view === 'portfolio' && (
@@ -444,8 +421,7 @@ export default function App() {
             metadata={metadata}
             onSelect={(id) => {
               const p = resolvePortfolio(id);
-              if (!p) return;
-              handlePortfolioSelected(p);
+              if (p) handlePortfolioAdded(p);
             }}
             onBack={() => setView('add_type')}
           />
@@ -455,15 +431,37 @@ export default function App() {
           <ETFSelectView
             etfs={etfsWithProxy}
             onSelect={(entry) => {
-              if (isCustomMode) {
+              if (customHoldings.length > 0 && view === 'etf_select') {
                 setPendingEtf(entry);
                 setWeightInput('');
                 setView('custom_weight');
               } else {
-                handlePortfolioSelected(etfToPortfolio(entry));
+                handlePortfolioAdded(etfToPortfolio(entry));
               }
             }}
-            onBack={() => isCustomMode ? setView('custom_build') : setView('add_type')}
+            onBack={() => {
+              if (customHoldings.length > 0) setView('custom_build');
+              else setView('add_type');
+            }}
+          />
+        )}
+
+        {view === 'manage' && (
+          <ManageView
+            customs={savedCustoms}
+            onCreateNew={() => {
+              setCustomHoldings([]);
+              setView('custom_build');
+            }}
+            onDelete={(id) => {
+              const updated = deleteCustomPortfolio(id);
+              setSavedCustoms(updated);
+            }}
+            onUse={(p) => handlePortfolioAdded(p)}
+            onBack={() => {
+              if (selectedPortfolios.length > 0 || view === 'manage') setView(selectedPortfolios.length > 0 ? 'select' : 'home');
+            }}
+            showUse={selectedPortfolios !== undefined}
           />
         )}
 
@@ -474,7 +472,8 @@ export default function App() {
             onRemove={(i) => setCustomHoldings((prev) => prev.filter((_, idx) => idx !== i))}
             onDone={() => {
               if (customHoldings.length === 0) return;
-              handlePortfolioSelected(customToPortfolio(customHoldings));
+              setCustomName('');
+              setView('custom_name');
             }}
           />
         )}
@@ -495,6 +494,21 @@ export default function App() {
           />
         )}
 
+        {view === 'custom_name' && (
+          <CustomNameView
+            name={customName}
+            onChange={setCustomName}
+            onSubmit={(name) => {
+              const id = `custom_${Date.now()}`;
+              const p: PortfolioDefinition = { id, name, holdings: customHoldings, tags: ['custom'] };
+              const updated = addCustomPortfolio(p);
+              setSavedCustoms(updated);
+              setCustomHoldings([]);
+              setView('manage');
+            }}
+          />
+        )}
+
         {view === 'params' && (
           <ParamsView
             startDate={startDate} endDate={endDate} capital={capital}
@@ -503,8 +517,8 @@ export default function App() {
             onStartDate={setStartDate} onEndDate={setEndDate} onCapital={setCapital}
             onRebalancing={setRebalancing} onCurrency={setCurrency} onInflation={setInflation}
             onNextStep={() => setParamStep((s) => s + 1)}
-            onRun={mode === 'swr' ? doSWR : mode === 'compare' ? doCompare : doBacktest}
-            runLabel={mode === 'swr' ? 'Run SWR Analysis' : mode === 'compare' ? 'Run Comparison' : 'Run Backtest'}
+            onRun={isSWRMode ? doSWR : doRun}
+            runLabel={isSWRMode ? 'Run SWR Analysis' : selectedPortfolios.length > 1 ? 'Run Comparison' : 'Run Backtest'}
             error={error}
           />
         )}
@@ -517,41 +531,27 @@ export default function App() {
           />
         )}
 
-        {(view === 'running' || view === 'swr_running' || view === 'compare_running') && (
+        {(view === 'running' || view === 'swr_running') && (
           <Box flexDirection="column" marginTop={1}>
             <Text>
               <Text color="green"><Spinner type="dots" /></Text>
-              {' '}{view === 'swr_running' ? 'Running SWR analysis (this may take a moment)...' :
-                   view === 'compare_running' ? 'Running comparison backtests...' :
+              {' '}{view === 'swr_running' ? 'Running SWR analysis...' :
+                   selectedPortfolios.length > 1 ? 'Running comparison backtests...' :
                    'Loading data and running backtest...'}
             </Text>
           </Box>
         )}
 
-        {view === 'results' && result && (
-          <ResultsView result={result} tab={tab} currency={currency} height={height - 5} mcYears={mcYears} />
+        {view === 'results' && results.length > 0 && (
+          <ResultsView result={results[0].result} tab={tab} currency={currency} height={height - 5} mcYears={mcYears} />
+        )}
+
+        {view === 'compare_results' && results.length > 1 && (
+          <CompareResultsView results={results} tab={compareTab} currency={currency} height={height - 5} />
         )}
 
         {view === 'swr_results' && swrResult && (
           <SWRResultsView swrResult={swrResult} swrTab={swrTab} currency={currency} />
-        )}
-
-        {view === 'compare_select' && (
-          <CompareSelectView
-            selected={comparePortfolios}
-            error={error}
-            onAddMore={() => { setError(''); setView('add_type'); }}
-            onRun={() => {
-              setError('');
-              setParamStep(0);
-              setView('params');
-            }}
-            onRemove={(i) => setComparePortfolios((prev) => prev.filter((_, idx) => idx !== i))}
-          />
-        )}
-
-        {view === 'compare_results' && (
-          <CompareResultsView results={compareResults} tab={compareTab} currency={currency} height={height - 5} />
         )}
       </Box>
 
@@ -573,27 +573,30 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
       </Text>
     );
   }
-  if (view === 'swr_results' || view === 'compare_results') {
-    return <Text dimColor>←→: tab   Esc: back   q: quit</Text>;
+  if (view === 'compare_results') {
+    return <Text dimColor>←→: tab  p: portfolio  s: settings  r: re-run  Esc: back  q: quit</Text>;
   }
-  if (['portfolio', 'compare_select', 'add_type', 'etf_select', 'custom_build'].includes(view)) {
-    return <Text dimColor>↑↓: navigate   Enter: select   Esc: back   q: quit</Text>;
+  if (view === 'swr_results') {
+    return <Text dimColor>←→: tab  Esc: back  q: quit</Text>;
   }
-  return <Text dimColor>Enter: confirm   Esc: back   q: quit</Text>;
+  if (['portfolio', 'etf_select', 'select', 'add_type', 'manage', 'custom_build'].includes(view)) {
+    return <Text dimColor>↑↓: navigate  Enter: select  Esc: back  q: quit</Text>;
+  }
+  return <Text dimColor>Enter: confirm  Esc: back  q: quit</Text>;
 }
 
-// ─── Mode View ───────────────────────────────────────────────────────────────
+// ─── Home View ──────────────────────────────────────────────────────────────
 
-function ModeView({ onSelect }: { onSelect: (m: AppMode) => void }) {
+function HomeView({ onSelect }: { onSelect: (action: 'backtest' | 'manage' | 'swr') => void }) {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select Mode</Text>
       <Box marginTop={1}>
         <SelectInput
           items={[
-            { label: 'Backtest — run single portfolio backtest', value: 'backtest' as AppMode },
-            { label: 'Compare — compare multiple portfolios', value: 'compare' as AppMode },
-            { label: 'SWR     — safe withdrawal rate analysis', value: 'swr' as AppMode },
+            { label: 'Backtest    — run & compare portfolios', value: 'backtest' as const },
+            { label: 'My Portfolios — create & manage custom portfolios', value: 'manage' as const },
+            { label: 'SWR Analysis  — safe withdrawal rate', value: 'swr' as const },
           ]}
           onSelect={(item) => onSelect(item.value)}
         />
@@ -602,7 +605,81 @@ function ModeView({ onSelect }: { onSelect: (m: AppMode) => void }) {
   );
 }
 
-// ─── Category View ───────────────────────────────────────────────────────────
+// ─── Select View (unified backtest/compare) ─────────────────────────────────
+
+function SelectView({ selected, isSWRMode, error, onAdd, onRemove, onRun }: {
+  selected: PortfolioDefinition[];
+  isSWRMode: boolean;
+  error: string;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  onRun: () => void;
+}) {
+  const maxCount = isSWRMode ? 1 : 4;
+  const minCount = 1;
+  const items: { label: string; value: string }[] = [];
+
+  if (selected.length < maxCount) {
+    items.push({ label: `+ Add portfolio (${selected.length}/${maxCount})`, value: 'add' });
+  }
+  selected.forEach((p, i) => {
+    items.push({ label: `✕ Remove ${p.name}`, value: `remove_${i}` });
+  });
+  if (selected.length >= minCount) {
+    const label = isSWRMode ? '▶ Configure parameters & run SWR'
+      : selected.length === 1 ? '▶ Configure parameters & run backtest'
+      : '▶ Configure parameters & run comparison';
+    items.push({ label, value: 'run' });
+  }
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>{isSWRMode ? 'SWR Analysis — Select Portfolio' : 'Select Portfolios'}</Text>
+      {!isSWRMode && <Text dimColor>Select 1 portfolio for backtest, 2–4 for comparison</Text>}
+      {error && <Text color="red">{error}</Text>}
+      {selected.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          {selected.map((p, i) => (
+            <Text key={p.id + i}> {i + 1}. <Text color="cyan">{p.name}</Text> ({p.holdings.length} holdings)</Text>
+          ))}
+        </Box>
+      )}
+      <Box marginTop={1}>
+        <SelectInput
+          items={items}
+          onSelect={(item) => {
+            if (item.value === 'add') onAdd();
+            else if (item.value === 'run') onRun();
+            else if (item.value.startsWith('remove_')) onRemove(parseInt(item.value.slice(7)));
+          }}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+// ─── Add Type View ──────────────────────────────────────────────────────────
+
+function AddTypeView({ savedCount, onSelect }: {
+  savedCount: number;
+  onSelect: (type: 'template' | 'single_etf' | 'saved') => void;
+}) {
+  const items: { label: string; value: 'template' | 'single_etf' | 'saved' }[] = [
+    { label: 'Template portfolio (All Weather, Golden Butterfly...)', value: 'template' },
+    { label: 'Single ETF (SPY, QQQ, VTI...)', value: 'single_etf' },
+  ];
+  if (savedCount > 0) {
+    items.push({ label: `My custom portfolios (${savedCount} saved)`, value: 'saved' });
+  }
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Add Portfolio — Select Type</Text>
+      <Box marginTop={1}>
+        <SelectInput items={items} onSelect={(item) => onSelect(item.value)} />
+      </Box>
+    </Box>
+  );
+}
 
 // ─── Portfolio View ──────────────────────────────────────────────────────────
 
@@ -625,7 +702,7 @@ function PortfolioView({ metadata, onSelect, onBack }: {
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold>Select Portfolio</Text>
+      <Text bold>Select Template Portfolio</Text>
       <Box marginTop={1}>
         <Text>🔍 </Text>
         <TextInput value={query} onChange={setQuery} placeholder="search by name, category..." />
@@ -647,48 +724,6 @@ function PortfolioView({ metadata, onSelect, onBack }: {
     </Box>
   );
 }
-
-// ─── Params View ─────────────────────────────────────────────────────────────
-
-// ─── Add Type View ──────────────────────────────────────────────────────────
-
-function AddTypeView({ onSelect }: { onSelect: (type: 'template' | 'single_etf' | 'custom') => void }) {
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text bold>Select Portfolio Type</Text>
-      <Box marginTop={1}>
-        <SelectInput
-          items={[
-            { label: 'Template portfolio (e.g., All Weather, Golden Butterfly)', value: 'template' as const },
-            { label: 'Single ETF (e.g., SPY, QQQ, VTI)', value: 'single_etf' as const },
-            { label: 'Custom portfolio (pick ETFs & weights)', value: 'custom' as const },
-          ]}
-          onSelect={(item) => onSelect(item.value)}
-        />
-      </Box>
-    </Box>
-  );
-}
-
-// ─── ETF Class View ─────────────────────────────────────────────────────────
-
-const ETF_CLASS_LABELS: Record<string, string> = {
-  us_large_cap: 'US Large Cap',
-  us_small_cap: 'US Small/Mid Cap',
-  us_total_market: 'US Total Market',
-  intl_developed: 'Intl Developed',
-  intl_emerging: 'Intl Emerging',
-  us_agg_bond: 'US Aggregate Bond',
-  us_treasury_long: 'US Treasury Long',
-  us_treasury_intermediate: 'US Treasury Intermediate',
-  us_treasury_short: 'US Treasury Short',
-  global_agg_bond: 'Global Bond',
-  us_tips: 'US TIPS',
-  us_reit: 'US REIT',
-  us_cash: 'US Cash/Short-term',
-  gold: 'Gold',
-  commodities: 'Commodities',
-};
 
 // ─── ETF Select View ────────────────────────────────────────────────────────
 
@@ -738,6 +773,63 @@ function ETFSelectView({ etfs, onSelect, onBack }: {
   );
 }
 
+// ─── Manage Custom Portfolios View ──────────────────────────────────────────
+
+function ManageView({ customs, onCreateNew, onDelete, onUse, onBack, showUse }: {
+  customs: PortfolioDefinition[];
+  onCreateNew: () => void;
+  onDelete: (id: string) => void;
+  onUse: (p: PortfolioDefinition) => void;
+  onBack: () => void;
+  showUse: boolean;
+}) {
+  const items: { label: string; value: string }[] = [
+    { label: '+ Create new custom portfolio', value: 'create' },
+  ];
+  customs.forEach((p) => {
+    const summary = p.holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(', ');
+    if (showUse) {
+      items.push({ label: `▶ Use: ${p.name} — ${summary}`, value: `use_${p.id}` });
+    }
+    items.push({ label: `✕ Delete: ${p.name}`, value: `delete_${p.id}` });
+  });
+  items.push({ label: '← Back', value: 'back' });
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>My Custom Portfolios</Text>
+      {customs.length === 0 && (
+        <Box marginTop={1}><Text dimColor>No custom portfolios saved yet</Text></Box>
+      )}
+      {customs.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          {customs.map((p, i) => (
+            <Box key={p.id} flexDirection="column">
+              <Text> {i + 1}. <Text bold color="cyan">{p.name}</Text></Text>
+              <Text dimColor>    {p.holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(' / ')}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
+      <Box marginTop={1}>
+        <SelectInput
+          items={items}
+          onSelect={(item) => {
+            if (item.value === 'create') onCreateNew();
+            else if (item.value === 'back') onBack();
+            else if (item.value.startsWith('use_')) {
+              const p = customs.find((c) => c.id === item.value.slice(4));
+              if (p) onUse(p);
+            } else if (item.value.startsWith('delete_')) {
+              onDelete(item.value.slice(7));
+            }
+          }}
+        />
+      </Box>
+    </Box>
+  );
+}
+
 // ─── Custom Build View ──────────────────────────────────────────────────────
 
 function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
@@ -747,7 +839,6 @@ function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
   onDone: () => void;
 }) {
   const totalWeight = holdings.reduce((s, h) => s + h.targetWeight, 0);
-
   const items: { label: string; value: string }[] = [
     { label: '+ Add ETF', value: 'add' },
   ];
@@ -755,7 +846,7 @@ function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
     items.push({ label: `✕ Remove ${h.asset.symbol} (${(h.targetWeight * 100).toFixed(1)}%)`, value: `remove_${i}` });
   });
   if (holdings.length > 0) {
-    items.push({ label: `▶ Done — use this portfolio (${(totalWeight * 100).toFixed(1)}% total)`, value: 'done' });
+    items.push({ label: `▶ Save portfolio (${(totalWeight * 100).toFixed(1)}% total)`, value: 'done' });
   }
 
   return (
@@ -802,6 +893,25 @@ function CustomWeightView({ etf, weightInput, onWeightChange, onSubmit }: {
         <TextInput value={weightInput} onChange={onWeightChange} onSubmit={onSubmit} />
       </Box>
       <Text dimColor>  Enter a number between 1-100, press Enter to confirm</Text>
+    </Box>
+  );
+}
+
+// ─── Custom Name View ───────────────────────────────────────────────────────
+
+function CustomNameView({ name, onChange, onSubmit }: {
+  name: string;
+  onChange: (v: string) => void;
+  onSubmit: (v: string) => void;
+}) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Name Your Portfolio</Text>
+      <Box marginTop={1}>
+        <Text>▸ Name: </Text>
+        <TextInput value={name} onChange={onChange} onSubmit={(v) => { if (v.trim()) onSubmit(v.trim()); }} />
+      </Box>
+      <Text dimColor>  Give it a name (e.g., "Tech Growth 60/40"), press Enter to save</Text>
     </Box>
   );
 }
@@ -966,7 +1076,6 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
   return (
     <Box flexDirection="column">
       <TabBar tabs={SWR_TABS} active={swrTab} />
-
       {swrTab === 'summary' && (
         <Box flexDirection="column">
           <Box gap={1}><Text>{'Safe WR Rate'.padEnd(20)}</Text><Text bold color="green">{fmtPct(swrResult.safeWithdrawalRate)}</Text></Box>
@@ -977,7 +1086,6 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
           <Box gap={1}><Text>{'Periods Tested'.padEnd(20)}</Text><Text>{swrResult.periodResults.length}</Text></Box>
         </Box>
       )}
-
       {swrTab === 'sweep' && (
         <Box flexDirection="column">
           <Box gap={1}>
@@ -1003,7 +1111,6 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
           })()}
         </Box>
       )}
-
       {swrTab === 'periods' && (
         <Box flexDirection="column">
           <Box gap={1}>
@@ -1029,55 +1136,6 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
   );
 }
 
-// ─── Compare Select View ─────────────────────────────────────────────────────
-
-function CompareSelectView({ selected, error, onAddMore, onRun, onRemove }: {
-  selected: PortfolioDefinition[];
-  error: string;
-  onAddMore: () => void;
-  onRun: () => void;
-  onRemove: (index: number) => void;
-}) {
-  const items: { label: string; value: string }[] = [];
-
-  if (selected.length < 4) {
-    items.push({ label: `+ Add portfolio (${selected.length}/4 selected)`, value: 'add' });
-  }
-  selected.forEach((p, i) => {
-    items.push({ label: `✕ Remove ${p.name}`, value: `remove_${i}` });
-  });
-  if (selected.length >= 2) {
-    items.push({ label: '▶ Configure parameters & run', value: 'run' });
-  }
-
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text bold>Compare Portfolios</Text>
-      {error && <Text color="red">{error}</Text>}
-      {selected.length > 0 && (
-        <Box flexDirection="column" marginTop={1}>
-          {selected.map((p, i) => (
-            <Text key={p.id + i}> {i + 1}. <Text color="cyan">{p.name}</Text> ({p.holdings.length} holdings)</Text>
-          ))}
-        </Box>
-      )}
-      {selected.length < 2 && (
-        <Box marginTop={1}><Text dimColor>Select at least 2 portfolios</Text></Box>
-      )}
-      <Box marginTop={1}>
-        <SelectInput
-          items={items}
-          onSelect={(item) => {
-            if (item.value === 'add') onAddMore();
-            else if (item.value === 'run') onRun();
-            else if (item.value.startsWith('remove_')) onRemove(parseInt(item.value.slice(7)));
-          }}
-        />
-      </Box>
-    </Box>
-  );
-}
-
 // ─── Compare Results View ────────────────────────────────────────────────────
 
 function CompareResultsView({ results, tab, currency, height }: {
@@ -1092,18 +1150,14 @@ function CompareResultsView({ results, tab, currency, height }: {
   return (
     <Box flexDirection="column">
       <TabBar tabs={COMPARE_TABS} active={tab} />
-
       {tab === 'table' && (
         <Box flexDirection="column">
-          {/* Header */}
           <Box gap={1}>
             <Text bold>{'Metric'.padEnd(16)}</Text>
             {results.map((r) => (
               <Text key={r.name} bold>{truncate(r.name, 14).padStart(14)}</Text>
             ))}
           </Box>
-
-          {/* Rows */}
           {([
             ['CAGR', (r: BacktestResult) => r.metrics.cagr, fmtPct, true],
             ['Total Return', (r: BacktestResult) => r.metrics.totalReturn, fmtPct, true],
@@ -1131,7 +1185,6 @@ function CompareResultsView({ results, tab, currency, height }: {
           })}
         </Box>
       )}
-
       {tab === 'chart' && (
         <Box flexDirection="column">
           {(() => {
