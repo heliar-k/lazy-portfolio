@@ -62,21 +62,16 @@ export function runBacktest(
     alignedReturns.push(aligned);
   }
 
-  // 3. Expand recurring cashflows (must happen before weights so cashflow months
-  //    can be passed to the rebalancing engine)
-  const cashflowSchedule = expandCashflows(cashflows);
-  const cashflowMonths = new Set(cashflowSchedule.keys());
-
-  // 4. Compute effective weights with rebalancing.
-  //    Months following a cashflow always trigger rebalancing so deposits and
-  //    withdrawals are invested at target weights rather than drifted weights.
+  // 3. Compute effective weights with rebalancing
   const effectiveWeights = computeEffectiveWeights(
     holdings,
     alignedReturns,
     rebalancing,
     monthGrid,
-    cashflowMonths,
   );
+
+  // 4. Expand recurring cashflows
+  const cashflowSchedule = expandCashflows(cashflows);
 
   // 5. Compound portfolio
 
