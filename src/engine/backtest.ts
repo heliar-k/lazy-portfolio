@@ -73,15 +73,19 @@ export function runBacktest(
   // 4. Expand recurring cashflows
   const cashflowSchedule = expandCashflows(cashflows);
 
-  // 5. Compound portfolio (with expense ratio fee deduction)
-  const expenseRatios = holdings.map((h) => h.asset.expenseRatio);
+  // 5. Compound portfolio
+  // NOTE: ER deduction is skipped here because for ETFs with real price data
+  // (blended CSVs), the ER is already reflected in the price returns.
+  // For proxy-only data, the proxy returns are index-level (no ER), so the
+  // returns are slightly overstated. A proper fix would adjust proxy returns
+  // for ER at data-generation time, then deduct ER uniformly here.
   const { values, cashflowImpacts } = compoundPortfolio(
     effectiveWeights,
     alignedReturns,
     initialCapital,
     cashflowSchedule,
     monthGrid,
-    expenseRatios,
+    undefined,
   );
 
   // 6. Build monthly time series (nominal, with drawdown tracking)

@@ -220,9 +220,14 @@ function main() {
   console.log(`  CAGR gap: ${((result.metrics.cagr - computeCagr(ref.returns.map(r => r / 100))) * 100).toFixed(2)}pp\n`);
 
   // 4. Align our monthly portfolio returns with reference
-  // Our result.timeSeries has 361 entries (portfolio values including initial)
-  // Reference has 360 monthly returns
+  // result.timeSeries has 361 entries (one per month end, 1996-05 to 2026-04)
+  // Reference has 360 monthly returns for the same months
+  // timeSeries[m] = portfolio value at end of month grid[m]
+  // Month-m return = (timeSeries[m] - timeSeries[m-1]) / timeSeries[m-1]
   const ourMonthlyReturns: number[] = [];
+  // Month 0 (1996-05): change from initial capital to first month end
+  ourMonthlyReturns.push((result.timeSeries[0].portfolioValue - params.initialCapital) / params.initialCapital);
+  // Months 1..359
   for (let i = 1; i < result.timeSeries.length; i++) {
     const prev = result.timeSeries[i - 1].portfolioValue;
     const curr = result.timeSeries[i].portfolioValue;

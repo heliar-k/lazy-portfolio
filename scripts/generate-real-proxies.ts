@@ -675,9 +675,11 @@ function extendProxySeries(
   const lastExisting = existing[existing.length - 1];
   const lastDate = lastExisting.date;
 
-  // Filter to only dates after the last existing date
+  const existingDates = new Set(existing.map(p => p.date));
+
+  // Filter to only dates after the last existing date that aren't already present
   const newPoints = extensionReturns
-    .filter(p => p.date > lastDate)
+    .filter(p => p.date > lastDate && !existingDates.has(p.date))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (newPoints.length === 0) {
