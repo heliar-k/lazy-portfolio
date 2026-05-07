@@ -645,7 +645,13 @@ async function fetchYahooMonthlyReturns(
       points.push({ date, monthlyReturn });
     }
 
-    return points;
+    // Deduplicate by date — Yahoo may return intra-month timestamps that
+    // map to the same end-of-month date; keep the last (most recent) entry.
+    const seen = new Map<string, MonthlyReturnPoint>();
+    for (const p of points) {
+      seen.set(p.date, p);
+    }
+    return [...seen.values()];
   } catch (err) {
     console.log(`   Yahoo Finance ${symbol} error: ${(err as Error).message}`);
     return [];
@@ -695,12 +701,15 @@ function extendProxySeries(
     extended.push({ date: pt.date, price: Math.round(lastPrice * 10000) / 10000 });
   }
 
-  // Append to CSV
-  const lines: string[] = [];
-  for (const p of extended) {
-    lines.push(`${p.date},${p.price}`);
+  // Rebuild CSV by combining existing + new data (avoids blank-line and duplicate bugs)
+  const allLines: string[] = [];
+  for (const p of existing) {
+    allLines.push(`${p.date},${p.price}`);
   }
-  fs.appendFileSync(proxyPath, '\n' + lines.join('\n'));
+  for (const p of extended) {
+    allLines.push(`${p.date},${p.price}`);
+  }
+  fs.writeFileSync(proxyPath, allLines.join('\n') + '\n');
 
   console.log(`   ${proxyName}: extended +${extended.length} months (${extended[0].date} → ${extended[extended.length - 1].date})`);
   return extended.length;
@@ -786,12 +795,15 @@ function extendCpiSeries(
     return 0;
   }
 
-  // Append to CSV (CPI CSV uses "date,cpi" format like price CSVs)
-  const lines: string[] = [];
-  for (const p of newPoints) {
-    lines.push(`${p.date},${p.value}`);
+  // Rebuild CSV by combining existing + new data (avoids blank-line and duplicate bugs)
+  const allLines: string[] = [];
+  for (const p of existing) {
+    allLines.push(`${p.date},${p.price}`);
   }
-  fs.appendFileSync(cpiPath, '\n' + lines.join('\n'));
+  for (const p of newPoints) {
+    allLines.push(`${p.date},${p.value}`);
+  }
+  fs.writeFileSync(cpiPath, allLines.join('\n') + '\n');
 
   console.log(`   US_CPI: extended +${newPoints.length} months (${newPoints[0].date} → ${newPoints[newPoints.length - 1].date})`);
   return newPoints.length;
@@ -805,7 +817,7 @@ async function extendAllProxies(
   console.log('\n10. Extending base proxy CSVs past Shiller data end (2023-09)...');
 
   const DATA_DIR_PROXIES = path.join(DATA_DIR, 'proxies');
-  const extensionStart = '2023-10'; // month after last Shiller data point
+  const extensionStart = '2023-09'; // one month before last Shiller data to capture transition return
   let totalExtended = 0;
   let totalSkipped = 0;
 

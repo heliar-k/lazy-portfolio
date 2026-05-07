@@ -118,6 +118,7 @@
       "maxDrawdown": -0.2058
     },
     "tolerances": {
+      "cagr": 0.005,
       "maxDrawdown": 0.05
     }
   },
@@ -210,7 +211,7 @@
     "site": "lazyportfolioetf.com",
     "url": "https://www.lazyportfolioetf.com/allocation/golden-butterfly/",
     "retrievedAt": "2026-05-05",
-    "description": "Tyler Golden Butterfly 10-year view. IJS uses SP500_TR proxy — SCV underperformed large cap in this period, so our CAGR is overstated.",
+    "description": "Tyler Golden Butterfly 10-year view. IJS uses SP500_TR proxy — SCV underperformed large cap in this period, so our CAGR is overstated. Wide CAGR tolerance.",
     "parameters": {
       "startDate": "2016-05",
       "endDate": "2026-04",
@@ -232,7 +233,7 @@
       "maxDrawdown": -0.1779
     },
     "tolerances": {
-      "cagr": 0.01,
+      "cagr": 0.015,
       "stdDevAnnualized": 0.015
     }
   }

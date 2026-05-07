@@ -81,44 +81,47 @@ describe('runBacktest', () => {
     const params = makeParams({ rebalancing: { type: 'calendar', frequency: 'monthly' } });
 
     // STOCK: 1%/mo, BOND: 0%/mo (makes for easy hand-verification)
+    // First month return is 0 to keep initial capital at $10,000 for month 0
     const assetReturns = new Map<string, MonthlyReturnPoint[]>();
     assetReturns.set('STOCK', makeReturnSeries([0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]));
     assetReturns.set('BOND', makeReturnSeries([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
 
     const result = runBacktest(params, assetReturns, new Map(), new Map());
 
-    // Verify time series
-    expect(result.timeSeries).toHaveLength(13); // Jan-Dec = 12 months + month 0
+    // Verify time series — 13 months: Jan 2020 through Jan 2021
+    expect(result.timeSeries).toHaveLength(13);
 
-    // Month 0: $10,000, no fees (ER deduction removed from engine)
+    // Month 0 (Jan 2020): $10,000 (first month return is 0 since both assets have 0 return)
     expect(result.timeSeries[0].portfolioValue).toBeCloseTo(10000, 0);
 
     // Monthly portfolio return = 0.6*0.01 + 0.4*0 = 0.006
-    // After 12 months: 10000 * (1.006)^12
+    // After 12 months of growth: 10000 * (1.006)^12
     expect(result.metrics.finalCapital).toBeCloseTo(10744.24, 0);
 
-    expect(result.metrics.cagr).toBeCloseTo(0.074424, 3);
+    // CAGR over 13 months (Jan 2020 – Jan 2021)
+    const expectedCagr = Math.pow(10744.24 / 10000, 12 / 13) - 1;
+    expect(result.metrics.cagr).toBeCloseTo(expectedCagr, 3);
 
-    // Total return
-    expect(result.metrics.totalReturn).toBeCloseTo(0.074424, 3);
+    // Total return (from initial capital)
+    expect(result.metrics.totalReturn).toBeCloseTo(10744.24 / 10000 - 1, 3);
 
     // No drawdown since portfolio only goes up
     expect(result.metrics.maxDrawdown).toBe(0);
 
-    // All positive months
-    expect(result.metrics.positiveMonthsPct).toBe(1);
+    // 12 of 13 months positive (first month is zero which is not positive)
+    expect(result.metrics.positiveMonthsPct).toBeCloseTo(12 / 13);
     expect(result.metrics.negativeMonthsPct).toBe(0);
 
-    // Annual returns: 12 returns in 2020, 1 return in Jan 2021
+    // Annual returns: 12 returns in 2020 (incl. zero Jan), 1 return in Jan 2021
     expect(result.annualReturns).toHaveLength(2);
     expect(result.annualReturns[0].year).toBe(2020);
     expect(result.annualReturns[0].return).toBeCloseTo(Math.pow(1.006, 11) - 1, 3);
     expect(result.annualReturns[1].year).toBe(2021);
     expect(result.annualReturns[1].return).toBeCloseTo(0.006, 3);
 
-    // Monthly distribution
+    // Monthly distribution — all 13 months
     const totalCount = result.monthlyReturnsDistribution.reduce((s, b) => s + b.count, 0);
-    expect(totalCount).toBe(12);
+    expect(totalCount).toBe(13);
   });
 
   it('returns empty result for empty portfolio', () => {

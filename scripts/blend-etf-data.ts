@@ -140,7 +140,13 @@ async function fetchYahooHistory(symbol: string): Promise<PricePoint[]> {
     });
   }
 
-  return data;
+  // Deduplicate by date — Yahoo may return intra-month timestamps that
+  // map to the same end-of-month date; keep the last (most recent) entry.
+  const seen = new Map<string, PricePoint>();
+  for (const p of data) {
+    seen.set(p.date, p);
+  }
+  return [...seen.values()];
 }
 
 // ---------------------------------------------------------------------------

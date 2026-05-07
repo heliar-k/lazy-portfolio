@@ -5,7 +5,7 @@ import type { BacktestMetrics, MonthlyTimeSeriesPoint } from './types';
  */
 export function computeMetrics(
   timeSeries: MonthlyTimeSeriesPoint[],
-  firstMonthReal: number,
+  initialCapital: number,
 ): BacktestMetrics {
   const n = timeSeries.length;
 
@@ -16,19 +16,19 @@ export function computeMetrics(
   const values = timeSeries.map((p) => p.portfolioValue);
   const returns = timeSeries.map((p) => p.monthlyReturn);
 
-  // Skip month 0 (no return for first month)
-  const effectiveReturns = returns.slice(1).filter((r) => !isNaN(r));
+  // All monthly returns are now valid (month 0 return is computed from initialCapital)
+  const effectiveReturns = returns.filter((r) => !isNaN(r));
 
   const finalCapital = values[n - 1];
-  const totalReturn = firstMonthReal > 0
-    ? (finalCapital / firstMonthReal) - 1
+  const totalReturn = initialCapital > 0
+    ? (finalCapital / initialCapital) - 1
     : 0;
 
-  // CAGR — month 0 is the starting point, so we have (n-1) months of growth
-  const years = (n - 1) / 12;
+  // CAGR — n months of growth from initialCapital to finalCapital
+  const years = n / 12;
   let cagr = 0;
   if (years > 0) {
-    const startVal = values[0] > 0 ? values[0] : 1;
+    const startVal = initialCapital > 0 ? initialCapital : 1;
     const endVal = values[n - 1];
     if (endVal > 0 && startVal > 0) {
       cagr = Math.pow(endVal / startVal, 1 / years) - 1;
@@ -77,9 +77,10 @@ export function computeMetrics(
 
   // Positive / negative months
   const positiveMonths = effectiveReturns.filter((r) => r > 0).length;
+  const negativeMonths = effectiveReturns.filter((r) => r < 0).length;
   const totalMonths = effectiveReturns.length;
   const positiveMonthsPct = totalMonths > 0 ? positiveMonths / totalMonths : 0;
-  const negativeMonthsPct = totalMonths > 0 ? (totalMonths - positiveMonths) / totalMonths : 0;
+  const negativeMonthsPct = totalMonths > 0 ? negativeMonths / totalMonths : 0;
 
   // Skewness / Kurtosis
   const { skewness, kurtosis } = computeDistributionStats(effectiveReturns);
@@ -216,7 +217,7 @@ export function computeAnnualReturns(
 ): { year: number; return: number }[] {
   const yearMap = new Map<number, number[]>(); // year → monthly returns
 
-  for (let i = 1; i < timeSeries.length; i++) {
+  for (let i = 0; i < timeSeries.length; i++) {
     const date = new Date(timeSeries[i].date);
     const year = date.getFullYear();
     const ret = timeSeries[i].monthlyReturn;

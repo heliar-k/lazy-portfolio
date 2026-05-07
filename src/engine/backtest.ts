@@ -96,6 +96,7 @@ export function runBacktest(
     alignedReturns,
     effectiveWeights,
     holdings,
+    initialCapital,
   );
 
   // 7. Inflation adjustment (mutates portfolioValueReal / monthlyReturnReal)
@@ -104,8 +105,7 @@ export function runBacktest(
   }
 
   // 8. Compute summary metrics
-  const firstMonthReal = timeSeries[0]?.portfolioValueReal ?? 0;
-  const metrics = computeMetrics(timeSeries, firstMonthReal);
+  const metrics = computeMetrics(timeSeries, initialCapital);
 
   // 9. Annual returns
   const annualReturns = computeAnnualReturns(timeSeries);
@@ -155,6 +155,7 @@ function buildTimeSeries(
   alignedReturns: (number | null)[][],
   effectiveWeights: number[][],
   holdings: PortfolioHolding[],
+  initialCapital: number,
 ): MonthlyTimeSeriesPoint[] {
   const n = monthGrid.length;
   const series: MonthlyTimeSeriesPoint[] = [];
@@ -167,7 +168,10 @@ function buildTimeSeries(
 
     // Monthly portfolio return (weighted sum of asset returns)
     let monthlyReturn = 0;
-    if (m > 0) {
+    if (m === 0) {
+      // First month: return from initialCapital to values[0]
+      monthlyReturn = initialCapital > 0 ? (portfolioValue - initialCapital) / initialCapital : 0;
+    } else {
       let totalWeight = 0;
       let weightedReturn = 0;
       for (let a = 0; a < holdings.length; a++) {
@@ -185,10 +189,9 @@ function buildTimeSeries(
     }
     const drawdown = peak > 0 ? (portfolioValue - peak) / peak : 0;
 
-    // Cumulative return relative to month 0
-    const startValue = values[0];
+    // Cumulative return relative to initial capital
     const cumulativeReturn =
-      startValue > 0 ? (portfolioValue / startValue) - 1 : 0;
+      initialCapital > 0 ? (portfolioValue / initialCapital) - 1 : 0;
 
     series.push({
       date: monthGrid[m],
@@ -218,7 +221,7 @@ function computeReturnDistribution(
     { bucket: '>5%', count: 0 },
   ];
 
-  for (let i = 1; i < timeSeries.length; i++) {
+  for (let i = 0; i < timeSeries.length; i++) {
     const r = timeSeries[i].monthlyReturn;
     if (isNaN(r)) continue;
 
