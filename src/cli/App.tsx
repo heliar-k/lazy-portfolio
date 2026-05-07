@@ -393,15 +393,9 @@ export default function App() {
       if (view === 'category' && key.escape) {
         setView('add_type');
       }
-      if (view === 'portfolio' && key.escape) {
-        setView('category');
-      }
       if (view === 'etf_class' && key.escape) {
         if (isCustomMode) setView('custom_build');
         else setView('add_type');
-      }
-      if (view === 'etf_select' && key.escape) {
-        setView('etf_class');
       }
       if (view === 'custom_build' && key.escape) {
         setView('add_type');
@@ -417,7 +411,7 @@ export default function App() {
         setView('mode');
       }
     },
-    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !['running', 'swr_running', 'compare_running'].includes(view) },
+    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !['running', 'swr_running', 'compare_running', 'portfolio', 'etf_select'].includes(view) },
   );
 
   const height = process.stdout.rows || 24;
@@ -477,6 +471,7 @@ export default function App() {
               if (!p) return;
               handlePortfolioSelected(p);
             }}
+            onBack={() => setView('category')}
           />
         )}
 
@@ -500,6 +495,7 @@ export default function App() {
                 handlePortfolioSelected(etfToPortfolio(entry));
               }
             }}
+            onBack={() => setView('etf_class')}
           />
         )}
 
@@ -661,22 +657,42 @@ function CategoryView({ categories, metadata, onSelect }: {
 
 // ─── Portfolio View ──────────────────────────────────────────────────────────
 
-function PortfolioView({ metadata, onSelect }: {
+function PortfolioView({ metadata, onSelect, onBack }: {
   metadata: { id: string; name: string; nameZh: string; holdingCount: number; riskLevel: string }[];
   onSelect: (id: string) => void;
+  onBack: () => void;
 }) {
+  const [query, setQuery] = useState('');
+  const q = query.toLowerCase();
+  const filtered = q
+    ? metadata.filter((t) =>
+        t.name.toLowerCase().includes(q) || t.nameZh?.toLowerCase().includes(q) || t.id.toLowerCase().includes(q))
+    : metadata;
+
+  useInput((_input, key) => {
+    if (key.escape) onBack();
+  }, { isActive: !query });
+
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select Portfolio</Text>
       <Box marginTop={1}>
-        <SelectInput
-          items={metadata.map((t) => ({
-            label: t.nameZh ? `${t.name} (${t.nameZh})` : t.name,
-            value: t.id,
-          }))}
-          onSelect={(item) => onSelect(item.value)}
-          limit={15}
-        />
+        <Text>Search: </Text>
+        <TextInput value={query} onChange={setQuery} placeholder="type to filter..." />
+      </Box>
+      <Box marginTop={1}>
+        {filtered.length > 0 ? (
+          <SelectInput
+            items={filtered.map((t) => ({
+              label: t.nameZh ? `${t.name} (${t.nameZh})` : t.name,
+              value: t.id,
+            }))}
+            onSelect={(item) => onSelect(item.value)}
+            limit={12}
+          />
+        ) : (
+          <Text dimColor>No matching portfolios</Text>
+        )}
       </Box>
     </Box>
   );
@@ -745,27 +761,46 @@ function ETFClassView({ assetClasses, etfs, onSelect }: {
 
 // ─── ETF Select View ────────────────────────────────────────────────────────
 
-function ETFSelectView({ etfs, onSelect }: {
+function ETFSelectView({ etfs, onSelect, onBack }: {
   etfs: EtfMapEntry[];
   onSelect: (entry: EtfMapEntry) => void;
+  onBack: () => void;
 }) {
-  const items = etfs.map((e) => ({
-    label: `${e.symbol.padEnd(6)} ${e.name}`,
-    value: e.symbol,
-  }));
+  const [query, setQuery] = useState('');
+  const q = query.toLowerCase();
+  const filtered = q
+    ? etfs.filter((e) =>
+        e.symbol.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.nameZh?.toLowerCase().includes(q))
+    : etfs;
   const bySymbol = new Map(etfs.map((e) => [e.symbol, e]));
+
+  useInput((_input, key) => {
+    if (key.escape) onBack();
+  }, { isActive: !query });
+
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select ETF</Text>
       <Box marginTop={1}>
-        <SelectInput
-          items={items}
-          onSelect={(item) => {
-            const entry = bySymbol.get(item.value);
-            if (entry) onSelect(entry);
-          }}
-          limit={15}
-        />
+        <Text>Search: </Text>
+        <TextInput value={query} onChange={setQuery} placeholder="symbol or name..." />
+      </Box>
+      <Box marginTop={1}>
+        {filtered.length > 0 ? (
+          <SelectInput
+            items={filtered.map((e) => ({
+              label: `${e.symbol.padEnd(6)} ${e.name}`,
+              value: e.symbol,
+            }))}
+            onSelect={(item) => {
+              const entry = bySymbol.get(item.value);
+              if (entry) onSelect(entry);
+            }}
+            limit={12}
+          />
+        ) : (
+          <Text dimColor>No matching ETFs</Text>
+        )}
       </Box>
     </Box>
   );
@@ -1169,12 +1204,14 @@ function CompareResultsView({ results, tab, currency, height }: {
         <Box flexDirection="column">
           {(() => {
             const width = Math.min((process.stdout.columns || 80) - 15, 100);
-            const chartH = Math.max(height - 8, 8);
+            const chartH = Math.max(height - 10, 8);
             const colors = [asciichart.cyan, asciichart.yellow, asciichart.green, asciichart.magenta];
             const series = results.map((r) => {
               const values = r.result.timeSeries.map((p) => p.portfolioValue);
               return downsample(values, width);
             });
+            const dates = results[0].result.timeSeries.map((p) => p.date);
+            const sampledDates = downsampleDates(dates, width);
             const formatVal = (v: number) => {
               if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
               if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
@@ -1185,6 +1222,7 @@ function CompareResultsView({ results, tab, currency, height }: {
               colors: colors.slice(0, results.length),
               format: (v: number) => formatVal(v).padStart(8),
             });
+            const xAxis = buildXAxis(sampledDates, width, Y_AXIS_OFFSET);
             return (
               <>
                 <Box gap={2} marginBottom={1}>
@@ -1195,6 +1233,7 @@ function CompareResultsView({ results, tab, currency, height }: {
                   ))}
                 </Box>
                 <Text>{chart}</Text>
+                <Text dimColor>{xAxis}</Text>
               </>
             );
           })()}
@@ -1258,22 +1297,23 @@ function ChartPanel({ timeSeries, height }: { timeSeries: BacktestResult['timeSe
   if (timeSeries.length === 0) return <Text dimColor>No data</Text>;
 
   const width = Math.min((process.stdout.columns || 80) - 15, 120);
-  const chartHeight = Math.max(height - 4, 10);
+  const chartHeight = Math.max(height - 6, 8);
   const values = timeSeries.map((p) => p.portfolioValue);
+  const dates = timeSeries.map((p) => p.date);
   const sampled = downsample(values, width);
+  const sampledDates = downsampleDates(dates, width);
   const formatVal = (v: number) => {
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
     if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
     return v.toFixed(0);
   };
   const chart = asciichart.plot(sampled, { height: chartHeight, format: (v: number) => formatVal(v).padStart(8) });
-  const start = timeSeries[0].date.slice(0, 7);
-  const end = timeSeries[timeSeries.length - 1].date.slice(0, 7);
+  const xAxis = buildXAxis(sampledDates, sampled.length, Y_AXIS_OFFSET);
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>{start} ~ {end}  ({timeSeries.length} months)</Text>
       <Text>{chart}</Text>
+      <Text dimColor>{xAxis}</Text>
     </Box>
   );
 }
@@ -1403,6 +1443,37 @@ function downsample(data: number[], targetLen: number): number[] {
   }
   return result;
 }
+
+function downsampleDates(dates: string[], targetLen: number): string[] {
+  if (dates.length <= targetLen) return dates;
+  const step = (dates.length - 1) / (targetLen - 1);
+  const result: string[] = [];
+  for (let i = 0; i < targetLen; i++) {
+    result.push(dates[Math.round(i * step)]);
+  }
+  return result;
+}
+
+function buildXAxis(dates: string[], chartWidth: number, axisOffset: number): string {
+  const labelCount = Math.max(Math.floor(chartWidth / 10), 2);
+  const step = (dates.length - 1) / (labelCount - 1);
+  const axis = new Array(chartWidth).fill(' ');
+
+  for (let i = 0; i < labelCount; i++) {
+    const dataIdx = Math.round(i * step);
+    const label = dates[dataIdx]?.slice(0, 7) ?? '';
+    const pos = dataIdx;
+    if (pos + label.length <= chartWidth) {
+      for (let c = 0; c < label.length; c++) {
+        axis[pos + c] = label[c];
+      }
+    }
+  }
+
+  return ' '.repeat(axisOffset) + axis.join('');
+}
+
+const Y_AXIS_OFFSET = 10;
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
