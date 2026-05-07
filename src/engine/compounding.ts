@@ -10,6 +10,7 @@ export function compoundPortfolio(
   initialCapital: number,
   cashflowSchedule: Map<string, number>, // date → net cashflow (deposits positive)
   months: string[],
+  expenseRatios?: number[], // [assetIdx] annual expense ratios
 ): {
   values: number[];
   cashflowImpacts: number[];
@@ -22,6 +23,7 @@ export function compoundPortfolio(
 
   const values: number[] = [];
   const cashflowImpacts: number[] = [];
+  const totalFees: number[] = [];
 
   // Month 0: start with initial capital + any cashflow on that date
   const cf0 = cashflowSchedule.get(months[0]) ?? 0;
@@ -30,6 +32,18 @@ export function compoundPortfolio(
   cashflowImpacts.push(cf0);
 
   for (let m = 1; m < nMonths; m++) {
+    // Deduct expense ratio fees (annual fee / 12)
+    let monthlyFee = 0;
+    if (expenseRatios && expenseRatios.length > 0) {
+      for (let a = 0; a < effectiveWeights[m].length; a++) {
+        const weight = effectiveWeights[m][a];
+        const er = expenseRatios[a] ?? 0;
+        monthlyFee += weight * (er / 12) * capital;
+      }
+      capital -= monthlyFee;
+      if (capital < 0) capital = 0;
+    }
+
     // Compute weighted portfolio return for this month
     let portfolioReturn = 0;
     let totalWeight = 0;
@@ -53,6 +67,7 @@ export function compoundPortfolio(
 
     values.push(capital);
     cashflowImpacts.push(cf);
+    totalFees.push(monthlyFee);
   }
 
   return { values, cashflowImpacts };

@@ -73,13 +73,15 @@ export function runBacktest(
   // 4. Expand recurring cashflows
   const cashflowSchedule = expandCashflows(cashflows);
 
-  // 5. Compound portfolio
+  // 5. Compound portfolio (with expense ratio fee deduction)
+  const expenseRatios = holdings.map((h) => h.asset.expenseRatio);
   const { values, cashflowImpacts } = compoundPortfolio(
     effectiveWeights,
     alignedReturns,
     initialCapital,
     cashflowSchedule,
     monthGrid,
+    expenseRatios,
   );
 
   // 6. Build monthly time series (nominal, with drawdown tracking)

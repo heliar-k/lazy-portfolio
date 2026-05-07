@@ -94,15 +94,13 @@ describe('runBacktest', () => {
     expect(result.timeSeries[0].portfolioValue).toBe(10000);
 
     // Monthly portfolio return = 0.6*0.01 + 0.4*0 = 0.006
-    // After 12 months: 10000 * 1.006^12 ≈ 10744.37
-    const expectedFinal = 10000 * Math.pow(1.006, 12);
-    expect(result.metrics.finalCapital).toBeCloseTo(expectedFinal, 0);
+    // After 12 months with expense ratio fees (0.03% per asset)
+    expect(result.metrics.finalCapital).toBeCloseTo(10741.02, 0);
 
-    // CAGR = (10744.37/10000)^(1/1) - 1 ≈ 0.074437
-    expect(result.metrics.cagr).toBeCloseTo(0.074437, 3);
+    expect(result.metrics.cagr).toBeCloseTo(0.074102, 3);
 
     // Total return
-    expect(result.metrics.totalReturn).toBeCloseTo(expectedFinal / 10000 - 1, 4);
+    expect(result.metrics.totalReturn).toBeCloseTo(0.074102, 3);
 
     // No drawdown since portfolio only goes up
     expect(result.metrics.maxDrawdown).toBe(0);
