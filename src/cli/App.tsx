@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, createContext, useContext } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
@@ -10,7 +10,7 @@ import { resolvePortfolioData } from './data-resolver.js';
 import { runBacktest } from '../engine/backtest.js';
 import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
 import { computeSWR } from '../engine/withdrawal.js';
-import { loadCustomPortfolios, addCustomPortfolio, updateCustomPortfolio, deleteCustomPortfolio } from './custom-store.js';
+import { loadCustomPortfolios, addCustomPortfolio, updateCustomPortfolio, deleteCustomPortfolio, loadPreferences, savePreferences } from './custom-store.js';
 import type {
   PortfolioDefinition,
   PortfolioHolding,
@@ -36,6 +36,7 @@ type View =
   | 'custom_name'
   | 'rename'
   | 'fork_template'
+  | 'theme'
   | 'params'
   | 'running'
   | 'results'
@@ -103,6 +104,201 @@ const ETF_CLASS_LABELS: Record<string, string> = {
   gold: 'Gold', commodities: 'Commodities',
 };
 
+// ─── Themes ─────────────────────────────────────────────────────────────────
+
+interface ThemeColors {
+  accent: string;
+  positive: string;
+  negative: string;
+  warning: string;
+  muted: string;
+  text: string;
+  highlight: string;
+  info: string;
+  chartColors: readonly string[];
+  chartAsciiColors: readonly string[];
+}
+
+interface ThemeDef {
+  name: string;
+  dark: ThemeColors;
+  light: ThemeColors;
+}
+
+type ColorScheme = 'dark' | 'light' | 'auto';
+
+function detectColorScheme(): 'dark' | 'light' {
+  const colorfgbg = process.env.COLORFGBG;
+  if (colorfgbg) {
+    const parts = colorfgbg.split(';');
+    const bg = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(bg) && bg >= 7) return 'light';
+  }
+  return 'dark';
+}
+
+function resolveScheme(scheme: ColorScheme): 'dark' | 'light' {
+  return scheme === 'auto' ? detectColorScheme() : scheme;
+}
+
+const THEMES: Record<string, ThemeDef> = {
+  catppuccin: {
+    name: 'Catppuccin',
+    dark: {
+      accent: 'blueBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'magentaBright', info: 'cyanBright',
+      chartColors: ['blueBright', 'magentaBright', 'greenBright', 'yellowBright'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.green, asciichart.yellow],
+    },
+    light: {
+      accent: 'blue', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'magenta', info: 'cyan',
+      chartColors: ['blue', 'magenta', 'green', 'yellow'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.green, asciichart.yellow],
+    },
+  },
+  dracula: {
+    name: 'Dracula',
+    dark: {
+      accent: 'magentaBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'cyanBright', info: 'yellowBright',
+      chartColors: ['magentaBright', 'greenBright', 'cyanBright', 'yellowBright'],
+      chartAsciiColors: [asciichart.magenta, asciichart.green, asciichart.cyan, asciichart.yellow],
+    },
+    light: {
+      accent: 'magenta', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'cyan', info: 'yellow',
+      chartColors: ['magenta', 'green', 'cyan', 'yellow'],
+      chartAsciiColors: [asciichart.magenta, asciichart.green, asciichart.cyan, asciichart.yellow],
+    },
+  },
+  tokyonight: {
+    name: 'Tokyo Night',
+    dark: {
+      accent: 'blueBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'magentaBright', info: 'cyanBright',
+      chartColors: ['blueBright', 'magentaBright', 'yellowBright', 'cyanBright'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.yellow, asciichart.cyan],
+    },
+    light: {
+      accent: 'blue', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'magenta', info: 'cyan',
+      chartColors: ['blue', 'magenta', 'yellow', 'cyan'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.yellow, asciichart.cyan],
+    },
+  },
+  nord: {
+    name: 'Nord',
+    dark: {
+      accent: 'cyanBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'blueBright', info: 'cyanBright',
+      chartColors: ['cyanBright', 'blueBright', 'greenBright', 'magentaBright'],
+      chartAsciiColors: [asciichart.cyan, asciichart.blue, asciichart.green, asciichart.magenta],
+    },
+    light: {
+      accent: 'cyan', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'blue', info: 'cyan',
+      chartColors: ['cyan', 'blue', 'green', 'magenta'],
+      chartAsciiColors: [asciichart.cyan, asciichart.blue, asciichart.green, asciichart.magenta],
+    },
+  },
+  onedark: {
+    name: 'One Dark',
+    dark: {
+      accent: 'blueBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'cyanBright', info: 'magentaBright',
+      chartColors: ['blueBright', 'greenBright', 'cyanBright', 'magentaBright'],
+      chartAsciiColors: [asciichart.blue, asciichart.green, asciichart.cyan, asciichart.magenta],
+    },
+    light: {
+      accent: 'blue', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'cyan', info: 'magenta',
+      chartColors: ['blue', 'green', 'cyan', 'magenta'],
+      chartAsciiColors: [asciichart.blue, asciichart.green, asciichart.cyan, asciichart.magenta],
+    },
+  },
+  gruvbox: {
+    name: 'Gruvbox',
+    dark: {
+      accent: 'yellowBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'cyanBright', info: 'blueBright',
+      chartColors: ['yellowBright', 'greenBright', 'cyanBright', 'blueBright'],
+      chartAsciiColors: [asciichart.yellow, asciichart.green, asciichart.cyan, asciichart.blue],
+    },
+    light: {
+      accent: 'yellow', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'cyan', info: 'blue',
+      chartColors: ['yellow', 'green', 'cyan', 'blue'],
+      chartAsciiColors: [asciichart.yellow, asciichart.green, asciichart.cyan, asciichart.blue],
+    },
+  },
+  monokai: {
+    name: 'Monokai',
+    dark: {
+      accent: 'yellowBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'magentaBright', info: 'cyanBright',
+      chartColors: ['yellowBright', 'greenBright', 'cyanBright', 'magentaBright'],
+      chartAsciiColors: [asciichart.yellow, asciichart.green, asciichart.cyan, asciichart.magenta],
+    },
+    light: {
+      accent: 'yellow', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'magenta', info: 'cyan',
+      chartColors: ['yellow', 'green', 'cyan', 'magenta'],
+      chartAsciiColors: [asciichart.yellow, asciichart.green, asciichart.cyan, asciichart.magenta],
+    },
+  },
+  solarized: {
+    name: 'Solarized',
+    dark: {
+      accent: 'blueBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'white', highlight: 'cyanBright', info: 'magentaBright',
+      chartColors: ['blueBright', 'greenBright', 'yellowBright', 'magentaBright'],
+      chartAsciiColors: [asciichart.blue, asciichart.green, asciichart.yellow, asciichart.magenta],
+    },
+    light: {
+      accent: 'blue', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'cyan', info: 'magenta',
+      chartColors: ['blue', 'green', 'yellow', 'magenta'],
+      chartAsciiColors: [asciichart.blue, asciichart.green, asciichart.yellow, asciichart.magenta],
+    },
+  },
+  kanagawa: {
+    name: 'Kanagawa',
+    dark: {
+      accent: 'blueBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'gray', text: 'whiteBright', highlight: 'magentaBright', info: 'cyanBright',
+      chartColors: ['blueBright', 'magentaBright', 'greenBright', 'yellowBright'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.green, asciichart.yellow],
+    },
+    light: {
+      accent: 'blue', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'magenta', info: 'cyan',
+      chartColors: ['blue', 'magenta', 'green', 'yellow'],
+      chartAsciiColors: [asciichart.blue, asciichart.magenta, asciichart.green, asciichart.yellow],
+    },
+  },
+  highContrast: {
+    name: 'High Contrast',
+    dark: {
+      accent: 'whiteBright', positive: 'greenBright', negative: 'redBright', warning: 'yellowBright',
+      muted: 'white', text: 'whiteBright', highlight: 'whiteBright', info: 'blueBright',
+      chartColors: ['greenBright', 'yellowBright', 'cyanBright', 'magentaBright'],
+      chartAsciiColors: [asciichart.green, asciichart.yellow, asciichart.cyan, asciichart.magenta],
+    },
+    light: {
+      accent: 'black', positive: 'green', negative: 'red', warning: 'yellow',
+      muted: 'gray', text: 'black', highlight: 'black', info: 'blue',
+      chartColors: ['green', 'red', 'blue', 'magenta'],
+      chartAsciiColors: [asciichart.green, asciichart.red, asciichart.blue, asciichart.magenta],
+    },
+  },
+};
+
+const THEME_KEYS = Object.keys(THEMES);
+
+const ThemeContext = createContext<ThemeColors>(THEMES.catppuccin.dark);
+const useTheme = () => useContext(ThemeContext);
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -112,6 +308,12 @@ export default function App() {
   const [isSWRMode, setIsSWRMode] = useState(false);
   const [error, setError] = useState('');
 
+  // Theme state
+  const [themeKey, setThemeKey] = useState<string>(() => loadPreferences().theme ?? 'catppuccin');
+  const [colorScheme, setColorScheme] = useState<ColorScheme>(() => loadPreferences().colorScheme ?? 'auto');
+  const resolvedScheme = resolveScheme(colorScheme);
+  const themeDef = THEMES[themeKey] ?? THEMES.catppuccin;
+  const themeColors = themeDef[resolvedScheme];
   // Portfolio selection (1–4 portfolios, unified for backtest & compare)
   const [selectedPortfolios, setSelectedPortfolios] = useState<PortfolioDefinition[]>([]);
   const [results, setResults] = useState<{ name: string; result: BacktestResult }[]>([]);
@@ -347,6 +549,9 @@ export default function App() {
       if (view === 'manage' && key.escape) {
         setView('home');
       }
+      if (view === 'theme' && key.escape) {
+        setView('home');
+      }
       if (view === 'custom_build' && key.escape) {
         setView('manage');
       }
@@ -372,16 +577,18 @@ export default function App() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
+    <ThemeContext.Provider value={themeColors}>
     <Box flexDirection="column" height={height}>
       {/* Header */}
       <Box borderStyle="single" paddingX={1}>
-        <Text bold color="cyan">Lazy Portfolio Backtest</Text>
+        <Text bold color={themeColors.accent as any}>Lazy Portfolio Backtest</Text>
         {selectedPortfolios.length === 1 && (
           <Text>  ·  <Text bold>{selectedPortfolios[0].name}</Text></Text>
         )}
         {selectedPortfolios.length > 1 && (
           <Text>  ·  <Text bold>{selectedPortfolios.length} portfolios</Text></Text>
         )}
+        <Text dimColor>  [{themeDef.name} · {resolvedScheme}]</Text>
       </Box>
 
       {/* Main content */}
@@ -399,8 +606,26 @@ export default function App() {
               setIsSWRMode(true);
               setSelectedPortfolios([]);
               setView('select');
+            } else if (action === 'theme') {
+              setView('theme');
             }
           }} />
+        )}
+
+        {view === 'theme' && (
+          <ThemeSelectView
+            currentTheme={themeKey}
+            currentScheme={colorScheme}
+            onSelectTheme={(key) => {
+              setThemeKey(key);
+              savePreferences({ theme: key, colorScheme });
+            }}
+            onSelectScheme={(scheme) => {
+              setColorScheme(scheme);
+              savePreferences({ theme: themeKey, colorScheme: scheme });
+            }}
+            onBack={() => setView('home')}
+          />
         )}
 
         {view === 'select' && (
@@ -601,7 +826,7 @@ export default function App() {
         {(view === 'running' || view === 'swr_running') && (
           <Box flexDirection="column" marginTop={1}>
             <Text>
-              <Text color="green"><Spinner type="dots" /></Text>
+              <Text color={themeColors.positive as any}><Spinner type="dots" /></Text>
               {' '}{view === 'swr_running' ? 'Running SWR analysis...' :
                    selectedPortfolios.length > 1 ? 'Running comparison backtests...' :
                    'Loading data and running backtest...'}
@@ -627,6 +852,68 @@ export default function App() {
         <StatusBar view={view} tab={tab} />
       </Box>
     </Box>
+    </ThemeContext.Provider>
+  );
+}
+
+// ─── Theme Select View ──────────────────────────────────────────────────────
+
+function ThemeSelectView({ currentTheme, currentScheme, onSelectTheme, onSelectScheme, onBack }: {
+  currentTheme: string;
+  currentScheme: ColorScheme;
+  onSelectTheme: (key: string) => void;
+  onSelectScheme: (scheme: ColorScheme) => void;
+  onBack: () => void;
+}) {
+  const t = useTheme();
+  const [step, setStep] = useState<'theme' | 'scheme'>('theme');
+
+  if (step === 'scheme') {
+    return (
+      <Box flexDirection="column" marginTop={1}>
+        <Text bold>Color Scheme</Text>
+        <Box marginTop={1}>
+          <SelectInput
+            items={[
+              { label: `Auto (detect from terminal)${currentScheme === 'auto' ? '  ←' : ''}`, value: 'auto' as const },
+              { label: `Dark${currentScheme === 'dark' ? '  ←' : ''}`, value: 'dark' as const },
+              { label: `Light${currentScheme === 'light' ? '  ←' : ''}`, value: 'light' as const },
+              { label: '← Back to themes', value: 'back' as const },
+            ]}
+            onSelect={(item) => {
+              if (item.value === 'back') { setStep('theme'); return; }
+              onSelectScheme(item.value as ColorScheme);
+            }}
+          />
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Select Theme</Text>
+      <Box marginTop={1} flexDirection="column">
+        <Text>  Preview:  <Text color={t.accent as any}>accent</Text>  <Text color={t.positive as any}>positive</Text>  <Text color={t.negative as any}>negative</Text>  <Text color={t.warning as any}>warning</Text>  <Text color={t.highlight as any}>highlight</Text>  <Text color={t.info as any}>info</Text></Text>
+      </Box>
+      <Box marginTop={1}>
+        <SelectInput
+          items={[
+            ...THEME_KEYS.map((key) => ({
+              label: `${THEMES[key].name}${key === currentTheme ? '  ←' : ''}`,
+              value: key,
+            })),
+            { label: `Color Scheme: ${currentScheme}`, value: '__scheme__' },
+            { label: '← Back', value: '__back__' },
+          ]}
+          onSelect={(item) => {
+            if (item.value === '__back__') onBack();
+            else if (item.value === '__scheme__') setStep('scheme');
+            else onSelectTheme(item.value);
+          }}
+        />
+      </Box>
+    </Box>
   );
 }
 
@@ -646,7 +933,7 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
   if (view === 'swr_results') {
     return <Text dimColor>←→: tab  Esc: back  q: quit</Text>;
   }
-  if (['portfolio', 'etf_select', 'select', 'add_type', 'manage', 'custom_build', 'fork_template'].includes(view)) {
+  if (['portfolio', 'etf_select', 'select', 'add_type', 'manage', 'custom_build', 'fork_template', 'theme'].includes(view)) {
     return <Text dimColor>↑↓: navigate  Enter: select  Esc: back  q: quit</Text>;
   }
   return <Text dimColor>Enter: confirm  Esc: back  q: quit</Text>;
@@ -654,7 +941,7 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
 
 // ─── Home View ──────────────────────────────────────────────────────────────
 
-function HomeView({ onSelect }: { onSelect: (action: 'backtest' | 'manage' | 'swr') => void }) {
+function HomeView({ onSelect }: { onSelect: (action: 'backtest' | 'manage' | 'swr' | 'theme') => void }) {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select Mode</Text>
@@ -664,6 +951,7 @@ function HomeView({ onSelect }: { onSelect: (action: 'backtest' | 'manage' | 'sw
             { label: 'Backtest    — run & compare portfolios', value: 'backtest' as const },
             { label: 'My Portfolios — create & manage custom portfolios', value: 'manage' as const },
             { label: 'SWR Analysis  — safe withdrawal rate', value: 'swr' as const },
+            { label: 'Theme         — change color theme', value: 'theme' as const },
           ]}
           onSelect={(item) => onSelect(item.value)}
         />
@@ -682,6 +970,7 @@ function SelectView({ selected, isSWRMode, error, onAdd, onRemove, onRun }: {
   onRemove: (index: number) => void;
   onRun: () => void;
 }) {
+  const t = useTheme();
   const maxCount = isSWRMode ? 1 : 4;
   const minCount = 1;
   const items: { label: string; value: string }[] = [];
@@ -703,11 +992,11 @@ function SelectView({ selected, isSWRMode, error, onAdd, onRemove, onRun }: {
     <Box flexDirection="column" marginTop={1}>
       <Text bold>{isSWRMode ? 'SWR Analysis — Select Portfolio' : 'Select Portfolios'}</Text>
       {!isSWRMode && <Text dimColor>Select 1 portfolio for backtest, 2–4 for comparison</Text>}
-      {error && <Text color="red">{error}</Text>}
+      {error && <Text color={t.negative as any}>{error}</Text>}
       {selected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           {selected.map((p, i) => (
-            <Text key={p.id + i}> {i + 1}. <Text color="cyan">{p.name}</Text> ({p.holdings.length} holdings)</Text>
+            <Text key={p.id + i}> {i + 1}. <Text color={t.accent as any}>{p.name}</Text> ({p.holdings.length} holdings)</Text>
           ))}
         </Box>
       )}
@@ -853,6 +1142,7 @@ function ManageView({ customs, onCreateNew, onForkTemplate, onDelete, onRename, 
   onBack: () => void;
   showUse: boolean;
 }) {
+  const t = useTheme();
   const items: { label: string; value: string }[] = [
     { label: '+ Create from scratch', value: 'create' },
     { label: '+ Fork from template', value: 'fork' },
@@ -878,7 +1168,7 @@ function ManageView({ customs, onCreateNew, onForkTemplate, onDelete, onRename, 
         <Box flexDirection="column" marginTop={1}>
           {customs.map((p, i) => (
             <Box key={p.id} flexDirection="column">
-              <Text> {i + 1}. <Text bold color="cyan">{p.name}</Text></Text>
+              <Text> {i + 1}. <Text bold color={t.accent as any}>{p.name}</Text></Text>
               <Text dimColor>    {p.holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(' / ')}</Text>
             </Box>
           ))}
@@ -919,6 +1209,7 @@ function CustomBuildView({ holdings, isEditing, onAdd, onRemove, onDone }: {
   onRemove: (index: number) => void;
   onDone: () => void;
 }) {
+  const t = useTheme();
   const totalWeight = holdings.reduce((s, h) => s + h.targetWeight, 0);
   const items: { label: string; value: string }[] = [
     { label: '+ Add ETF', value: 'add' },
@@ -940,7 +1231,7 @@ function CustomBuildView({ holdings, isEditing, onAdd, onRemove, onDone }: {
         <Box flexDirection="column" marginTop={1}>
           {holdings.map((h, i) => (
             <Text key={h.asset.symbol + i}>
-              {' '}{h.asset.symbol.padEnd(6)} <Text color="cyan">{(h.targetWeight * 100).toFixed(1).padStart(5)}%</Text> {h.asset.name}
+              {' '}{h.asset.symbol.padEnd(6)} <Text color={t.accent as any}>{(h.targetWeight * 100).toFixed(1).padStart(5)}%</Text> {h.asset.name}
             </Text>
           ))}
           <Text dimColor>  Total: {(totalWeight * 100).toFixed(1)}%{Math.abs(totalWeight - 1) > 0.001 ? ' (weights should sum to 100%)' : ''}</Text>
@@ -1015,6 +1306,7 @@ function ParamsView({
   onRebalancing: (v: string) => void; onCurrency: (v: DisplayCurrency) => void; onInflation: (v: boolean) => void;
   onNextStep: () => void; onRun: () => void; runLabel: string; error: string;
 }) {
+  const t = useTheme();
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
   const [localCapital, setLocalCapital] = useState(capital);
@@ -1022,7 +1314,7 @@ function ParamsView({
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Configure Parameters</Text>
-      {error && <Text color="red">Error: {error}</Text>}
+      {error && <Text color={t.negative as any}>Error: {error}</Text>}
 
       <Box marginTop={1} flexDirection="column" gap={0}>
         <Box>
@@ -1030,7 +1322,7 @@ function ParamsView({
           {paramStep === 1 ? (
             <TextInput value={localStart} onChange={setLocalStart} onSubmit={(v) => { onStartDate(v); onNextStep(); }} />
           ) : (
-            <Text color={paramStep > 1 ? 'green' : 'gray'}>{startDate}</Text>
+            <Text color={paramStep > 1 ? t.positive as any : t.muted as any}>{startDate}</Text>
           )}
         </Box>
 
@@ -1040,7 +1332,7 @@ function ParamsView({
             {paramStep === 2 ? (
               <TextInput value={localEnd} onChange={setLocalEnd} onSubmit={(v) => { onEndDate(v); onNextStep(); }} />
             ) : (
-              <Text color={paramStep > 2 ? 'green' : 'gray'}>{endDate}</Text>
+              <Text color={paramStep > 2 ? t.positive as any : t.muted as any}>{endDate}</Text>
             )}
           </Box>
         )}
@@ -1051,7 +1343,7 @@ function ParamsView({
             {paramStep === 3 ? (
               <TextInput value={localCapital} onChange={setLocalCapital} onSubmit={(v) => { onCapital(v); onNextStep(); }} />
             ) : (
-              <Text color={paramStep > 3 ? 'green' : 'gray'}>{capital}</Text>
+              <Text color={paramStep > 3 ? t.positive as any : t.muted as any}>{capital}</Text>
             )}
           </Box>
         )}
@@ -1063,7 +1355,7 @@ function ParamsView({
           </Box>
         )}
         {paramStep > 4 && (
-          <Box><Text>  Rebalancing: </Text><Text color="green">{REBALANCING_OPTIONS.find((o) => o.value === rebalancing)?.label}</Text></Box>
+          <Box><Text>  Rebalancing: </Text><Text color={t.positive as any}>{REBALANCING_OPTIONS.find((o) => o.value === rebalancing)?.label}</Text></Box>
         )}
 
         {paramStep === 5 && (
@@ -1073,7 +1365,7 @@ function ParamsView({
           </Box>
         )}
         {paramStep > 5 && (
-          <Box><Text>  Currency:    </Text><Text color="green">{currency}</Text></Box>
+          <Box><Text>  Currency:    </Text><Text color={t.positive as any}>{currency}</Text></Box>
         )}
 
         {paramStep === 6 && (
@@ -1086,7 +1378,7 @@ function ParamsView({
           </Box>
         )}
         {paramStep > 6 && (
-          <Box><Text>  Inflation:   </Text><Text color="green">{inflation ? 'Yes' : 'No'}</Text></Box>
+          <Box><Text>  Inflation:   </Text><Text color={t.positive as any}>{inflation ? 'Yes' : 'No'}</Text></Box>
         )}
 
         {paramStep >= 7 && (
@@ -1154,6 +1446,7 @@ function ResultsView({ result, tab, currency, height, mcYears }: {
 function SWRResultsView({ swrResult, swrTab, currency }: {
   swrResult: SWRResult; swrTab: SWRTab; currency: string;
 }) {
+  const t = useTheme();
   const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
   const fmtMoney = (v: number) =>
     new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
@@ -1163,10 +1456,10 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
       <TabBar tabs={SWR_TABS} active={swrTab} />
       {swrTab === 'summary' && (
         <Box flexDirection="column">
-          <Box gap={1}><Text>{'Safe WR Rate'.padEnd(20)}</Text><Text bold color="green">{fmtPct(swrResult.safeWithdrawalRate)}</Text></Box>
-          <Box gap={1}><Text>{'Success Rate (4%)'.padEnd(20)}</Text><Text color={swrResult.successRate >= 0.95 ? 'green' : 'red'}>{fmtPct(swrResult.successRate)}</Text></Box>
+          <Box gap={1}><Text>{'Safe WR Rate'.padEnd(20)}</Text><Text bold color={t.positive as any}>{fmtPct(swrResult.safeWithdrawalRate)}</Text></Box>
+          <Box gap={1}><Text>{'Success Rate (4%)'.padEnd(20)}</Text><Text color={(swrResult.successRate >= 0.95 ? t.positive : t.negative) as any}>{fmtPct(swrResult.successRate)}</Text></Box>
           <Box gap={1}><Text>{'Median Final (4%)'.padEnd(20)}</Text><Text>{fmtMoney(swrResult.medianFinalBalance)}</Text></Box>
-          <Box gap={1}><Text>{'Worst Case (4%)'.padEnd(20)}</Text><Text color="red">{fmtMoney(swrResult.worstCaseFinalBalance)}</Text></Box>
+          <Box gap={1}><Text>{'Worst Case (4%)'.padEnd(20)}</Text><Text color={t.negative as any}>{fmtMoney(swrResult.worstCaseFinalBalance)}</Text></Box>
           <Box gap={1}><Text>{'Retirement Years'.padEnd(20)}</Text><Text>{swrResult.params.retirementYears}</Text></Box>
           <Box gap={1}><Text>{'Periods Tested'.padEnd(20)}</Text><Text>{swrResult.periodResults.length}</Text></Box>
         </Box>
@@ -1188,8 +1481,8 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
               return (
                 <Box key={rate} gap={1}>
                   <Text>{fmtPct(rate).padEnd(8)}</Text>
-                  <Text color={pct >= 1 ? 'green' : pct >= 0.8 ? 'yellow' : 'red'}>{fmtPct(pct).padStart(10)}</Text>
-                  <Text color={pct >= 1 ? 'green' : pct >= 0.8 ? 'yellow' : 'red'}>  {bar}</Text>
+                  <Text color={(pct >= 1 ? t.positive : pct >= 0.8 ? t.warning : t.negative) as any}>{fmtPct(pct).padStart(10)}</Text>
+                  <Text color={(pct >= 1 ? t.positive : pct >= 0.8 ? t.warning : t.negative) as any}>  {bar}</Text>
                 </Box>
               );
             });
@@ -1207,9 +1500,9 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
           {swrResult.periodResults.slice(0, 20).map((p) => (
             <Box key={p.startDate} gap={1}>
               <Text>{p.startDate.padEnd(10)}</Text>
-              <Text color={p.success ? 'green' : 'red'}>{(p.success ? 'OK' : 'FAIL').padEnd(8)}</Text>
+              <Text color={(p.success ? t.positive : t.negative) as any}>{(p.success ? 'OK' : 'FAIL').padEnd(8)}</Text>
               <Text>{fmtMoney(p.finalBalance).padStart(15)}</Text>
-              <Text color={p.minBalance < 0 ? 'red' : 'white'}>{fmtMoney(p.minBalance).padStart(13)}</Text>
+              <Text color={(p.minBalance < 0 ? t.negative : t.text) as any}>{fmtMoney(p.minBalance).padStart(13)}</Text>
             </Box>
           ))}
           {swrResult.periodResults.length > 20 && (
@@ -1227,6 +1520,7 @@ function CompareResultsView({ results, tab, currency, height }: {
   results: { name: string; result: BacktestResult }[];
   tab: CompareTab; currency: string; height: number;
 }) {
+  const t = useTheme();
   const fmtPct = (v: number) => `${(v * 100).toFixed(2)}%`;
   const fmtMoney = (v: number) =>
     new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
@@ -1261,7 +1555,7 @@ function CompareResultsView({ results, tab, currency, height }: {
               <Box key={label} gap={1}>
                 <Text>{label.padEnd(16)}</Text>
                 {values.map((v, i) => (
-                  <Text key={results[i].name} color={i === bestIdx ? 'green' : 'white'} bold={i === bestIdx}>
+                  <Text key={results[i].name} color={(i === bestIdx ? t.positive : t.text) as any} bold={i === bestIdx}>
                     {fmt(v).padStart(14)}
                   </Text>
                 ))}
@@ -1273,15 +1567,14 @@ function CompareResultsView({ results, tab, currency, height }: {
       {tab === 'chart' && (
         <Box flexDirection="column">
           {(() => {
-            const width = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
+            const maxWidth = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
             const chartH = Math.max(height - 10, 8);
-            const colors = [asciichart.cyan, asciichart.yellow, asciichart.green, asciichart.magenta];
             const series = results.map((r) => {
               const values = r.result.timeSeries.map((p) => p.portfolioValue);
-              return downsample(values, width);
+              return downsample(values, maxWidth);
             });
             const dates = results[0].result.timeSeries.map((p) => p.date);
-            const sampledDates = downsampleDates(dates, width);
+            const sampledDates = downsampleDates(dates, maxWidth);
             const formatVal = (v: number) => {
               if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
               if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
@@ -1289,15 +1582,16 @@ function CompareResultsView({ results, tab, currency, height }: {
             };
             const chart = asciichart.plot(series, {
               height: chartH,
-              colors: colors.slice(0, results.length),
+              colors: [...t.chartAsciiColors].slice(0, results.length),
+              symbols: CHART_SYMBOLS,
               format: (v: number) => formatVal(v).padStart(8),
             });
-            const xAxis = buildXAxis(sampledDates, width, Y_AXIS_OFFSET);
+            const xAxis = buildXAxis(sampledDates, series[0].length, Y_AXIS_OFFSET);
             return (
               <>
                 <Box gap={2} marginBottom={1}>
                   {results.map((r, i) => (
-                    <Text key={r.name} color={['cyan', 'yellow', 'green', 'magenta'][i] as any}>
+                    <Text key={r.name} color={t.chartColors[i] as any}>
                       ■ {truncate(r.name, 30)}
                     </Text>
                   ))}
@@ -1316,11 +1610,12 @@ function CompareResultsView({ results, tab, currency, height }: {
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
 function TabBar<T extends string>({ tabs, active }: { tabs: { key: T; label: string }[]; active: T }) {
+  const t = useTheme();
   return (
     <Box gap={2} marginBottom={1}>
-      {tabs.map((t) => (
-        <Text key={t.key} bold={active === t.key} color={active === t.key ? 'cyan' : 'gray'}>
-          {active === t.key ? `[${t.label}]` : ` ${t.label} `}
+      {tabs.map((tb) => (
+        <Text key={tb.key} bold={active === tb.key} color={(active === tb.key ? t.accent : t.muted) as any}>
+          {active === tb.key ? `[${tb.label}]` : ` ${tb.label} `}
         </Text>
       ))}
     </Box>
@@ -1330,23 +1625,24 @@ function TabBar<T extends string>({ tabs, active }: { tabs: { key: T; label: str
 // ─── Metrics Panel ───────────────────────────────────────────────────────────
 
 function MetricsPanel({ metrics, currency }: { metrics: BacktestResult['metrics']; currency: string }) {
+  const t = useTheme();
   const fmtPct = (v: number) => `${(v * 100).toFixed(2)}%`;
   const fmtMoney = (v: number) =>
     new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(v);
 
   const rows: [string, string, string][] = [
-    ['CAGR', fmtPct(metrics.cagr), metrics.cagr >= 0 ? 'green' : 'red'],
-    ['Total Return', fmtPct(metrics.totalReturn), metrics.totalReturn >= 0 ? 'green' : 'red'],
-    ['Final Capital', fmtMoney(metrics.finalCapital), 'white'],
-    ['Std Dev (Ann.)', fmtPct(metrics.stdDevAnnualized), 'yellow'],
-    ['Max Drawdown', fmtPct(metrics.maxDrawdown), 'red'],
-    ['Sharpe Ratio', metrics.sharpeRatio.toFixed(2), metrics.sharpeRatio >= 0 ? 'green' : 'red'],
-    ['Sortino Ratio', metrics.sortinoRatio.toFixed(2), metrics.sortinoRatio >= 0 ? 'green' : 'red'],
-    ['Best Year', `${metrics.bestYear.year}  ${fmtPct(metrics.bestYear.return)}`, 'green'],
-    ['Worst Year', `${metrics.worstYear.year}  ${fmtPct(metrics.worstYear.return)}`, 'red'],
-    ['Positive Months', fmtPct(metrics.positiveMonthsPct), 'white'],
-    ['Rolling 3Y Best', fmtPct(metrics.rolling3YrBest), 'green'],
-    ['Rolling 3Y Worst', fmtPct(metrics.rolling3YrWorst), 'red'],
+    ['CAGR', fmtPct(metrics.cagr), metrics.cagr >= 0 ? t.positive : t.negative],
+    ['Total Return', fmtPct(metrics.totalReturn), metrics.totalReturn >= 0 ? t.positive : t.negative],
+    ['Final Capital', fmtMoney(metrics.finalCapital), t.text],
+    ['Std Dev (Ann.)', fmtPct(metrics.stdDevAnnualized), t.warning],
+    ['Max Drawdown', fmtPct(metrics.maxDrawdown), t.negative],
+    ['Sharpe Ratio', metrics.sharpeRatio.toFixed(2), metrics.sharpeRatio >= 0 ? t.positive : t.negative],
+    ['Sortino Ratio', metrics.sortinoRatio.toFixed(2), metrics.sortinoRatio >= 0 ? t.positive : t.negative],
+    ['Best Year', `${metrics.bestYear.year}  ${fmtPct(metrics.bestYear.return)}`, t.positive],
+    ['Worst Year', `${metrics.worstYear.year}  ${fmtPct(metrics.worstYear.return)}`, t.negative],
+    ['Positive Months', fmtPct(metrics.positiveMonthsPct), t.text],
+    ['Rolling 3Y Best', fmtPct(metrics.rolling3YrBest), t.positive],
+    ['Rolling 3Y Worst', fmtPct(metrics.rolling3YrWorst), t.negative],
   ];
 
   return (
@@ -1366,18 +1662,18 @@ function MetricsPanel({ metrics, currency }: { metrics: BacktestResult['metrics'
 function ChartPanel({ timeSeries, height }: { timeSeries: BacktestResult['timeSeries']; height: number }) {
   if (timeSeries.length === 0) return <Text dimColor>No data</Text>;
 
-  const width = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
+  const maxWidth = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
   const chartHeight = Math.max(height - 6, 8);
   const values = timeSeries.map((p) => p.portfolioValue);
   const dates = timeSeries.map((p) => p.date);
-  const sampled = downsample(values, width);
-  const sampledDates = downsampleDates(dates, width);
+  const sampled = downsample(values, maxWidth);
+  const sampledDates = downsampleDates(dates, maxWidth);
   const formatVal = (v: number) => {
     if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
     if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
     return v.toFixed(0);
   };
-  const chart = asciichart.plot(sampled, { height: chartHeight, format: (v: number) => formatVal(v).padStart(8) });
+  const chart = asciichart.plot(sampled, { height: chartHeight, symbols: CHART_SYMBOLS, format: (v: number) => formatVal(v).padStart(8) });
   const xAxis = buildXAxis(sampledDates, sampled.length, Y_AXIS_OFFSET);
 
   return (
@@ -1391,6 +1687,7 @@ function ChartPanel({ timeSeries, height }: { timeSeries: BacktestResult['timeSe
 // ─── Monte Carlo Panel ───────────────────────────────────────────────────────
 
 function MonteCarloPanel({ result, years }: { result: BacktestResult; years: number }) {
+  const t = useTheme();
   const mc = useMemo(
     () => runMonteCarlo({
       timeSeries: result.timeSeries,
@@ -1407,20 +1704,22 @@ function MonteCarloPanel({ result, years }: { result: BacktestResult; years: num
   const fmtMoney = (v: number) =>
     new Intl.NumberFormat('en', { style: 'currency', currency: result.parameters.displayCurrency, maximumFractionDigits: 0 }).format(v);
 
+  const pctColor = (p: number) => (p >= 50 ? t.positive : p >= 25 ? t.warning : t.negative) as any;
+
   return (
     <Box flexDirection="column">
       <Text bold>Monte Carlo Simulation — {years} Year Projection  (+/-: change)</Text>
       <Text dimColor>1000 simulations, bootstrap sampling from historical returns</Text>
       <Box marginTop={1} flexDirection="column">
-        <Box gap={1}><Text>{'Prob. Positive'.padEnd(22)}</Text><Text bold color="green">{(mc.probabilityPositive * 100).toFixed(1)}%</Text></Box>
-        <Box gap={1}><Text>{'Prob. Beat Inflation'.padEnd(22)}</Text><Text bold color="blue">{(mc.probabilityBeatInflation * 100).toFixed(1)}%</Text></Box>
+        <Box gap={1}><Text>{'Prob. Positive'.padEnd(22)}</Text><Text bold color={t.positive as any}>{(mc.probabilityPositive * 100).toFixed(1)}%</Text></Box>
+        <Box gap={1}><Text>{'Prob. Beat Inflation'.padEnd(22)}</Text><Text bold color={t.info as any}>{(mc.probabilityBeatInflation * 100).toFixed(1)}%</Text></Box>
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text bold>Percentile Outcomes:</Text>
         {[10, 25, 50, 75, 90].map((p) => (
           <Box key={p} gap={1}>
             <Text>{`${p}th percentile`.padEnd(22)}</Text>
-            <Text color={p >= 50 ? 'green' : p >= 25 ? 'yellow' : 'red'}>
+            <Text color={pctColor(p)}>
               {fmtMoney(getPercentile(mc.finalValues, p))}
             </Text>
           </Box>
@@ -1438,7 +1737,7 @@ function MonteCarloPanel({ result, years }: { result: BacktestResult; years: num
           <Box key={i} gap={1}>
             <Text>{`Y${i}`.padEnd(6)}</Text>
             {[10, 25, 50, 75, 90].map((p) => (
-              <Text key={p} color={p >= 50 ? 'green' : p >= 25 ? 'yellow' : 'red'}>
+              <Text key={p} color={pctColor(p)}>
                 {fmtMoney(mc.percentilePaths[p]?.[i] ?? 0).padStart(10)}
               </Text>
             ))}
@@ -1452,6 +1751,7 @@ function MonteCarloPanel({ result, years }: { result: BacktestResult; years: num
 // ─── Annual Panel ────────────────────────────────────────────────────────────
 
 function AnnualPanel({ annualReturns }: { annualReturns: BacktestResult['annualReturns'] }) {
+  const t = useTheme();
   if (annualReturns.length === 0) return <Text dimColor>No data</Text>;
 
   return (
@@ -1469,8 +1769,8 @@ function AnnualPanel({ annualReturns }: { annualReturns: BacktestResult['annualR
         return (
           <Box key={ar.year} gap={1}>
             <Text>{String(ar.year).padEnd(6)}</Text>
-            <Text color={ret >= 0 ? 'green' : 'red'}>{pct}</Text>
-            <Text color={ret >= 0 ? 'green' : 'red'}>  {ret < 0 ? '-' : ' '}{bar}</Text>
+            <Text color={(ret >= 0 ? t.positive : t.negative) as any}>{pct}</Text>
+            <Text color={(ret >= 0 ? t.positive : t.negative) as any}>  {ret < 0 ? '-' : ' '}{bar}</Text>
           </Box>
         );
       })}
@@ -1481,6 +1781,7 @@ function AnnualPanel({ annualReturns }: { annualReturns: BacktestResult['annualR
 // ─── Holdings Panel ──────────────────────────────────────────────────────────
 
 function HoldingsPanel({ holdings }: { holdings: BacktestResult['parameters']['portfolio']['holdings'] }) {
+  const t = useTheme();
   return (
     <Box flexDirection="column">
       <Box gap={1} marginBottom={1}>
@@ -1490,7 +1791,7 @@ function HoldingsPanel({ holdings }: { holdings: BacktestResult['parameters']['p
       </Box>
       {holdings.map((h) => (
         <Box key={h.asset.symbol} gap={1}>
-          <Text color="cyan">{h.asset.symbol.padEnd(8)}</Text>
+          <Text color={t.accent as any}>{h.asset.symbol.padEnd(8)}</Text>
           <Text>{`${(h.targetWeight * 100).toFixed(1)}%`.padStart(7)}</Text>
           <Text>  {h.asset.name}</Text>
         </Box>
@@ -1544,6 +1845,9 @@ function buildXAxis(dates: string[], chartWidth: number, axisOffset: number): st
 }
 
 const Y_AXIS_OFFSET = 10;
+
+const CHART_SYMBOLS: [string, string, string, string, string, string, string, string, string, string] =
+  ['┼', '┤', '╶', '╴', '─', '└', '┌', '┐', '┘', '│'];
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;

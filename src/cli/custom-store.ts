@@ -5,6 +5,7 @@ import type { PortfolioDefinition } from '../engine/types.js';
 
 const STORE_DIR = path.join(os.homedir(), '.lazy-portfolio');
 const STORE_FILE = path.join(STORE_DIR, 'custom-portfolios.json');
+const PREFS_FILE = path.join(STORE_DIR, 'preferences.json');
 
 export function loadCustomPortfolios(): PortfolioDefinition[] {
   try {
@@ -42,4 +43,23 @@ export function deleteCustomPortfolio(id: string): PortfolioDefinition[] {
   const all = loadCustomPortfolios().filter((p) => p.id !== id);
   saveCustomPortfolios(all);
   return all;
+}
+
+export interface Preferences {
+  theme?: string;
+  colorScheme?: 'dark' | 'light' | 'auto';
+}
+
+export function loadPreferences(): Preferences {
+  try {
+    if (!fs.existsSync(PREFS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(PREFS_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+export function savePreferences(prefs: Preferences): void {
+  fs.mkdirSync(STORE_DIR, { recursive: true });
+  fs.writeFileSync(PREFS_FILE, JSON.stringify(prefs, null, 2));
 }
