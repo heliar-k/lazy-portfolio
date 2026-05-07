@@ -16,6 +16,9 @@ const ComparePage = lazy(() =>
 const TemplatesPage = lazy(() =>
   import('@/components/templates/TemplatesPage').then(m => ({ default: m.TemplatesPage })),
 );
+const TemplateDetail = lazy(() =>
+  import('@/components/templates/TemplateDetail').then(m => ({ default: m.TemplateDetail })),
+);
 const MarketPage = lazy(() =>
   import('@/components/market/MarketPage').then(m => ({ default: m.MarketPage })),
 );
@@ -40,6 +43,7 @@ function AppRoutes() {
           <Route path="/backtest" element={<BacktestPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/templates" element={<TemplatesPage />} />
+          <Route path="/templates/:id" element={<TemplateDetail />} />
           <Route path="/market" element={<MarketPage />} />
         </Routes>
       </Suspense>

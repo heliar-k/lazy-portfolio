@@ -21,7 +21,12 @@ export function TemplatesPage() {
   const templates = getPortfolioTemplates(getAsset);
   const metadata = getTemplateMetadata();
 
-  const handleLoad = (templateId: string) => {
+  const handleCardClick = (templateId: string) => {
+    navigate(`/templates/${templateId}`);
+  };
+
+  const handleLoad = (e: React.MouseEvent, templateId: string) => {
+    e.stopPropagation();
     const template = templates.find((t) => t.id === templateId);
     if (template) {
       loadFromDefinition(template);
@@ -29,7 +34,8 @@ export function TemplatesPage() {
     }
   };
 
-  const handleBacktest = (templateId: string) => {
+  const handleBacktest = (e: React.MouseEvent, templateId: string) => {
+    e.stopPropagation();
     const template = templates.find((t) => t.id === templateId);
     if (template) {
       loadFromDefinition(template);
@@ -61,35 +67,37 @@ export function TemplatesPage() {
               {categoryTemplates.map((tmpl) => (
                 <div
                   key={tmpl.id}
+                  onClick={() => handleCardClick(tmpl.id)}
                   className="bg-white rounded-xl border border-gray-200 p-5 hover:border-blue-300
-                    hover:shadow-sm transition-all"
+                    hover:shadow-sm transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold text-gray-900">
-                      {isZh ? tmpl.nameZh : tmpl.name}
+                      {isZh && tmpl.nameZh ? tmpl.nameZh : tmpl.name}
+                      {isZh && tmpl.nameZh && <span className="block text-xs font-normal text-gray-400">{tmpl.name}</span>}
                     </h3>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium ${riskBadge(tmpl.riskLevel)}`}
                     >
-                      {tmpl.riskLevel}
+                      {tmpl.riskLevel === 'low' ? t('common.low') : tmpl.riskLevel === 'high' ? t('common.high') : t('common.medium')}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mb-3">
-                    {isZh ? tmpl.descriptionZh : tmpl.description}
+                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                    {isZh && tmpl.descriptionZh ? tmpl.descriptionZh : tmpl.description}
                   </p>
-                  <div className="text-xs text-gray-400 mb-3">
+                  <div className="text-xs text-gray-400 mb-3 truncate">
                     {tmpl.holdings.map((h) => h.symbol).join(', ')}
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleLoad(tmpl.id)}
+                      onClick={(e) => handleLoad(e, tmpl.id)}
                       className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50
                         rounded-lg hover:bg-blue-100 transition-colors"
                     >
                       {t('common.save')}
                     </button>
                     <button
-                      onClick={() => handleBacktest(tmpl.id)}
+                      onClick={(e) => handleBacktest(e, tmpl.id)}
                       className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600
                         rounded-lg hover:bg-blue-700 transition-colors"
                     >
