@@ -13,6 +13,7 @@ import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 import { ScatterChart } from '@/components/charts/ScatterChart';
+import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { timeSeriesToCSV, downloadCSV } from '@/lib/export-csv';
 
 type BrushWindow = { start: string; end: string } | null;
@@ -207,6 +208,12 @@ export function BacktestPage() {
           metrics={result?.metrics ?? null}
           benchmarkMetrics={benchmarkResult?.metrics ?? null}
           benchmarkName={benchmarkResult?.parameters.portfolio.name}
+          status={status}
+        />
+
+        <MonteCarloChart
+          timeSeries={result?.timeSeries ?? []}
+          initialCapital={params.initialCapital}
           status={status}
         />
       </div>
