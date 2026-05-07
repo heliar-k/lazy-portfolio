@@ -197,6 +197,12 @@ export default function App() {
 
   const handlePortfolioSelected = (p: PortfolioDefinition) => {
     if (mode === 'compare') {
+      if (comparePortfolios.some((cp) => cp.id === p.id)) {
+        setError(`"${p.name}" is already added`);
+        setView('compare_select');
+        return;
+      }
+      setError('');
       setComparePortfolios((prev) => [...prev, p]);
       setCompareStep((s) => s + 1);
       setView('compare_select');
@@ -569,11 +575,14 @@ export default function App() {
         {view === 'compare_select' && (
           <CompareSelectView
             selected={comparePortfolios}
-            onAddMore={() => setView('add_type')}
+            error={error}
+            onAddMore={() => { setError(''); setView('add_type'); }}
             onRun={() => {
+              setError('');
               setParamStep(0);
               setView('params');
             }}
+            onRemove={(i) => setComparePortfolios((prev) => prev.filter((_, idx) => idx !== i))}
           />
         )}
 
@@ -1055,16 +1064,21 @@ function SWRResultsView({ swrResult, swrTab, currency }: {
 
 // ─── Compare Select View ─────────────────────────────────────────────────────
 
-function CompareSelectView({ selected, onAddMore, onRun }: {
+function CompareSelectView({ selected, error, onAddMore, onRun, onRemove }: {
   selected: PortfolioDefinition[];
+  error: string;
   onAddMore: () => void;
   onRun: () => void;
+  onRemove: (index: number) => void;
 }) {
   const items: { label: string; value: string }[] = [];
 
   if (selected.length < 4) {
     items.push({ label: `+ Add portfolio (${selected.length}/4 selected)`, value: 'add' });
   }
+  selected.forEach((p, i) => {
+    items.push({ label: `✕ Remove ${p.name}`, value: `remove_${i}` });
+  });
   if (selected.length >= 2) {
     items.push({ label: '▶ Configure parameters & run', value: 'run' });
   }
@@ -1072,6 +1086,7 @@ function CompareSelectView({ selected, onAddMore, onRun }: {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Compare Portfolios</Text>
+      {error && <Text color="red">{error}</Text>}
       {selected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           {selected.map((p, i) => (
@@ -1087,7 +1102,8 @@ function CompareSelectView({ selected, onAddMore, onRun }: {
           items={items}
           onSelect={(item) => {
             if (item.value === 'add') onAddMore();
-            else onRun();
+            else if (item.value === 'run') onRun();
+            else if (item.value.startsWith('remove_')) onRemove(parseInt(item.value.slice(7)));
           }}
         />
       </Box>
@@ -1126,7 +1142,7 @@ function CompareResultsView({ results, tab, currency, height }: {
             ['Total Return', (r: BacktestResult) => r.metrics.totalReturn, fmtPct, true],
             ['Final Capital', (r: BacktestResult) => r.metrics.finalCapital, fmtMoney, true],
             ['Std Dev', (r: BacktestResult) => r.metrics.stdDevAnnualized, fmtPct, false],
-            ['Max Drawdown', (r: BacktestResult) => r.metrics.maxDrawdown, fmtPct, false],
+            ['Max Drawdown', (r: BacktestResult) => r.metrics.maxDrawdown, fmtPct, true],
             ['Sharpe', (r: BacktestResult) => r.metrics.sharpeRatio, fmtNum, true],
             ['Sortino', (r: BacktestResult) => r.metrics.sortinoRatio, fmtNum, true],
             ['Best Year', (r: BacktestResult) => r.metrics.bestYear.return, fmtPct, true],
