@@ -27,6 +27,17 @@ export function addCustomPortfolio(p: PortfolioDefinition): PortfolioDefinition[
   return all;
 }
 
+export function updateCustomPortfolio(id: string, updated: Partial<Pick<PortfolioDefinition, 'name' | 'holdings'>>): PortfolioDefinition[] {
+  const all = loadCustomPortfolios();
+  const idx = all.findIndex((p) => p.id === id);
+  if (idx !== -1) {
+    if (updated.name !== undefined) all[idx].name = updated.name;
+    if (updated.holdings !== undefined) all[idx].holdings = updated.holdings;
+    saveCustomPortfolios(all);
+  }
+  return all;
+}
+
 export function deleteCustomPortfolio(id: string): PortfolioDefinition[] {
   const all = loadCustomPortfolios().filter((p) => p.id !== id);
   saveCustomPortfolios(all);

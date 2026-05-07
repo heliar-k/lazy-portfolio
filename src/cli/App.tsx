@@ -10,7 +10,7 @@ import { resolvePortfolioData } from './data-resolver.js';
 import { runBacktest } from '../engine/backtest.js';
 import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
 import { computeSWR } from '../engine/withdrawal.js';
-import { loadCustomPortfolios, addCustomPortfolio, deleteCustomPortfolio } from './custom-store.js';
+import { loadCustomPortfolios, addCustomPortfolio, updateCustomPortfolio, deleteCustomPortfolio } from './custom-store.js';
 import type {
   PortfolioDefinition,
   PortfolioHolding,
@@ -34,6 +34,8 @@ type View =
   | 'custom_build'
   | 'custom_weight'
   | 'custom_name'
+  | 'rename'
+  | 'fork_template'
   | 'params'
   | 'running'
   | 'results'
@@ -127,6 +129,8 @@ export default function App() {
   const [weightInput, setWeightInput] = useState('');
   const [customName, setCustomName] = useState('');
   const [savedCustoms, setSavedCustoms] = useState<PortfolioDefinition[]>(() => loadCustomPortfolios());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [renamingPortfolio, setRenamingPortfolio] = useState<PortfolioDefinition | null>(null);
 
   // Monte Carlo state
   const [mcYears, setMcYears] = useState(10);
@@ -266,6 +270,7 @@ export default function App() {
   const isSWRTextEditing = view === 'swr_params';
   const isWeightEditing = view === 'custom_weight';
   const isNameEditing = view === 'custom_name';
+  const isRenaming = view === 'rename';
 
   useInput(
     (input, key) => {
@@ -346,13 +351,20 @@ export default function App() {
         setView('manage');
       }
       if (view === 'custom_weight' && key.escape) {
-        setView('etf_select');
+        setView('custom_build');
+      }
+      if (view === 'rename' && key.escape) {
+        setRenamingPortfolio(null);
+        setView('manage');
+      }
+      if (view === 'fork_template' && key.escape) {
+        setView('manage');
       }
       if (view === 'params' && key.escape && !isTextEditing) {
         setView('select');
       }
     },
-    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !isNameEditing && !['running', 'swr_running', 'portfolio', 'etf_select'].includes(view) },
+    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !isNameEditing && !isRenaming && !['running', 'swr_running', 'portfolio', 'etf_select', 'fork_template'].includes(view) },
   );
 
   const height = process.stdout.rows || 24;
@@ -431,7 +443,7 @@ export default function App() {
           <ETFSelectView
             etfs={etfsWithProxy}
             onSelect={(entry) => {
-              if (customHoldings.length > 0 && view === 'etf_select') {
+              if (customHoldings.length > 0 || editingId !== null) {
                 setPendingEtf(entry);
                 setWeightInput('');
                 setView('custom_weight');
@@ -440,7 +452,7 @@ export default function App() {
               }
             }}
             onBack={() => {
-              if (customHoldings.length > 0) setView('custom_build');
+              if (customHoldings.length > 0 || editingId !== null) setView('custom_build');
               else setView('add_type');
             }}
           />
@@ -450,12 +462,28 @@ export default function App() {
           <ManageView
             customs={savedCustoms}
             onCreateNew={() => {
+              setEditingId(null);
               setCustomHoldings([]);
               setView('custom_build');
+            }}
+            onForkTemplate={() => {
+              setEditingId(null);
+              setCustomHoldings([]);
+              setView('fork_template');
             }}
             onDelete={(id) => {
               const updated = deleteCustomPortfolio(id);
               setSavedCustoms(updated);
+            }}
+            onRename={(p) => {
+              setRenamingPortfolio(p);
+              setCustomName(p.name);
+              setView('rename');
+            }}
+            onEdit={(p) => {
+              setEditingId(p.id);
+              setCustomHoldings([...p.holdings]);
+              setView('custom_build');
             }}
             onUse={(p) => handlePortfolioAdded(p)}
             onBack={() => {
@@ -468,12 +496,21 @@ export default function App() {
         {view === 'custom_build' && (
           <CustomBuildView
             holdings={customHoldings}
+            isEditing={editingId !== null}
             onAdd={() => setView('etf_select')}
             onRemove={(i) => setCustomHoldings((prev) => prev.filter((_, idx) => idx !== i))}
             onDone={() => {
               if (customHoldings.length === 0) return;
-              setCustomName('');
-              setView('custom_name');
+              if (editingId) {
+                const updated = updateCustomPortfolio(editingId, { holdings: customHoldings });
+                setSavedCustoms(updated);
+                setEditingId(null);
+                setCustomHoldings([]);
+                setView('manage');
+              } else {
+                setCustomName('');
+                setView('custom_name');
+              }
             }}
           />
         )}
@@ -504,8 +541,38 @@ export default function App() {
               const updated = addCustomPortfolio(p);
               setSavedCustoms(updated);
               setCustomHoldings([]);
+              setEditingId(null);
               setView('manage');
             }}
+          />
+        )}
+
+        {view === 'rename' && renamingPortfolio && (
+          <CustomNameView
+            name={customName}
+            onChange={setCustomName}
+            onSubmit={(name) => {
+              const updated = updateCustomPortfolio(renamingPortfolio.id, { name });
+              setSavedCustoms(updated);
+              setRenamingPortfolio(null);
+              setView('manage');
+            }}
+            label="Rename Portfolio"
+          />
+        )}
+
+        {view === 'fork_template' && (
+          <PortfolioView
+            metadata={metadata}
+            onSelect={(id) => {
+              const p = resolvePortfolio(id);
+              if (p) {
+                setEditingId(null);
+                setCustomHoldings([...p.holdings]);
+                setView('custom_build');
+              }
+            }}
+            onBack={() => setView('manage')}
           />
         )}
 
@@ -579,7 +646,7 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
   if (view === 'swr_results') {
     return <Text dimColor>←→: tab  Esc: back  q: quit</Text>;
   }
-  if (['portfolio', 'etf_select', 'select', 'add_type', 'manage', 'custom_build'].includes(view)) {
+  if (['portfolio', 'etf_select', 'select', 'add_type', 'manage', 'custom_build', 'fork_template'].includes(view)) {
     return <Text dimColor>↑↓: navigate  Enter: select  Esc: back  q: quit</Text>;
   }
   return <Text dimColor>Enter: confirm  Esc: back  q: quit</Text>;
@@ -775,22 +842,28 @@ function ETFSelectView({ etfs, onSelect, onBack }: {
 
 // ─── Manage Custom Portfolios View ──────────────────────────────────────────
 
-function ManageView({ customs, onCreateNew, onDelete, onUse, onBack, showUse }: {
+function ManageView({ customs, onCreateNew, onForkTemplate, onDelete, onRename, onEdit, onUse, onBack, showUse }: {
   customs: PortfolioDefinition[];
   onCreateNew: () => void;
+  onForkTemplate: () => void;
   onDelete: (id: string) => void;
+  onRename: (p: PortfolioDefinition) => void;
+  onEdit: (p: PortfolioDefinition) => void;
   onUse: (p: PortfolioDefinition) => void;
   onBack: () => void;
   showUse: boolean;
 }) {
   const items: { label: string; value: string }[] = [
-    { label: '+ Create new custom portfolio', value: 'create' },
+    { label: '+ Create from scratch', value: 'create' },
+    { label: '+ Fork from template', value: 'fork' },
   ];
   customs.forEach((p) => {
     const summary = p.holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(', ');
     if (showUse) {
       items.push({ label: `▶ Use: ${p.name} — ${summary}`, value: `use_${p.id}` });
     }
+    items.push({ label: `✎ Edit: ${p.name}`, value: `edit_${p.id}` });
+    items.push({ label: `✎ Rename: ${p.name}`, value: `rename_${p.id}` });
     items.push({ label: `✕ Delete: ${p.name}`, value: `delete_${p.id}` });
   });
   items.push({ label: '← Back', value: 'back' });
@@ -816,10 +889,17 @@ function ManageView({ customs, onCreateNew, onDelete, onUse, onBack, showUse }: 
           items={items}
           onSelect={(item) => {
             if (item.value === 'create') onCreateNew();
+            else if (item.value === 'fork') onForkTemplate();
             else if (item.value === 'back') onBack();
             else if (item.value.startsWith('use_')) {
               const p = customs.find((c) => c.id === item.value.slice(4));
               if (p) onUse(p);
+            } else if (item.value.startsWith('edit_')) {
+              const p = customs.find((c) => c.id === item.value.slice(5));
+              if (p) onEdit(p);
+            } else if (item.value.startsWith('rename_')) {
+              const p = customs.find((c) => c.id === item.value.slice(7));
+              if (p) onRename(p);
             } else if (item.value.startsWith('delete_')) {
               onDelete(item.value.slice(7));
             }
@@ -832,8 +912,9 @@ function ManageView({ customs, onCreateNew, onDelete, onUse, onBack, showUse }: 
 
 // ─── Custom Build View ──────────────────────────────────────────────────────
 
-function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
+function CustomBuildView({ holdings, isEditing, onAdd, onRemove, onDone }: {
   holdings: PortfolioHolding[];
+  isEditing: boolean;
   onAdd: () => void;
   onRemove: (index: number) => void;
   onDone: () => void;
@@ -846,12 +927,15 @@ function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
     items.push({ label: `✕ Remove ${h.asset.symbol} (${(h.targetWeight * 100).toFixed(1)}%)`, value: `remove_${i}` });
   });
   if (holdings.length > 0) {
-    items.push({ label: `▶ Save portfolio (${(totalWeight * 100).toFixed(1)}% total)`, value: 'done' });
+    const label = isEditing
+      ? `▶ Save changes (${(totalWeight * 100).toFixed(1)}% total)`
+      : `▶ Save portfolio (${(totalWeight * 100).toFixed(1)}% total)`;
+    items.push({ label, value: 'done' });
   }
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold>Build Custom Portfolio</Text>
+      <Text bold>{isEditing ? 'Edit Portfolio' : 'Build Custom Portfolio'}</Text>
       {holdings.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           {holdings.map((h, i) => (
@@ -899,19 +983,20 @@ function CustomWeightView({ etf, weightInput, onWeightChange, onSubmit }: {
 
 // ─── Custom Name View ───────────────────────────────────────────────────────
 
-function CustomNameView({ name, onChange, onSubmit }: {
+function CustomNameView({ name, onChange, onSubmit, label }: {
   name: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
+  label?: string;
 }) {
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold>Name Your Portfolio</Text>
+      <Text bold>{label ?? 'Name Your Portfolio'}</Text>
       <Box marginTop={1}>
         <Text>▸ Name: </Text>
         <TextInput value={name} onChange={onChange} onSubmit={(v) => { if (v.trim()) onSubmit(v.trim()); }} />
       </Box>
-      <Text dimColor>  Give it a name (e.g., "Tech Growth 60/40"), press Enter to save</Text>
+      <Text dimColor>  Enter a name, press Enter to save</Text>
     </Box>
   );
 }
