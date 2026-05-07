@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 import { filterByDateRange } from '@/lib/filter-series';
+import { C } from '@/lib/chart-colors';
 
 interface RollingReturnsChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
@@ -54,7 +55,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
         data: rolling3Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#3b82f6', width: 1.5 },
+        lineStyle: { color: C.roll3y, width: 1.5 },
       },
       {
         name: t('chart.rolling5y'),
@@ -62,7 +63,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
         data: rolling5Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#f97316', width: 1.5 },
+        lineStyle: { color: C.roll5y, width: 1.5 },
       },
     ];
 
@@ -73,7 +74,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
         data: rolling10Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#22c55e', width: 1.5 },
+        lineStyle: { color: C.roll10y, width: 1.5 },
       });
     }
 
@@ -112,7 +113,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
       yAxis: {
         type: 'value',
         axisLabel: { formatter: '{value}%', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       series,
     };

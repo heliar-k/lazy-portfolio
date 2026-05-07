@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { BacktestResult } from '@/engine/types';
+import { C } from '@/lib/chart-colors';
 
 interface AnnualReturnsChartProps {
   result: BacktestResult | null;
@@ -29,7 +30,7 @@ export function AnnualReturnsChart({ result, status, brushWindow }: AnnualReturn
     const years = returns.map((r) => String(r.year));
     const values = returns.map((r) => r.return * 100);
     const colors = returns.map((r) =>
-      r.return >= 0 ? '#22c55e' : '#ef4444',
+      r.return >= 0 ? C.positive : C.negative,
     );
 
     return {
@@ -50,7 +51,7 @@ export function AnnualReturnsChart({ result, status, brushWindow }: AnnualReturn
       yAxis: {
         type: 'value',
         axisLabel: { formatter: '{value}%', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       series: [
         {

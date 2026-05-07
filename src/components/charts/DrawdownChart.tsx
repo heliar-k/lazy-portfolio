@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 import { filterByDateRange } from '@/lib/filter-series';
+import { C } from '@/lib/chart-colors';
 
 interface DrawdownChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
@@ -49,7 +50,7 @@ export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChart
             [
               {
                 xAxis: dates[maxDDStart],
-                itemStyle: { color: 'rgba(239, 68, 68, 0.08)' },
+                itemStyle: { color: C.drawdownMarkArea },
               },
               { xAxis: dates[maxDDEnd] },
             ],
@@ -82,7 +83,7 @@ export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChart
         type: 'value',
         inverse: true,
         axisLabel: { formatter: '{value}%', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
         max: 0,
       },
       series: [
@@ -91,8 +92,8 @@ export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChart
           data: drawdowns,
           smooth: false,
           symbol: 'none',
-          lineStyle: { color: '#ef4444', width: 1.5 },
-          areaStyle: { color: 'rgba(239, 68, 68, 0.2)' },
+          lineStyle: { color: C.drawdown, width: 1.5 },
+          areaStyle: { color: C.drawdownArea },
           markArea: {
             silent: true,
             data: markArea,

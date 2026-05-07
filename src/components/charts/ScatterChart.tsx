@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { BacktestMetrics } from '@/engine/types';
+import { C } from '@/lib/chart-colors';
 
 interface ScatterChartProps {
   metrics: BacktestMetrics | null;
@@ -20,7 +21,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
       {
         name: t('chart.portfolio'),
         value: [metrics.stdDevAnnualized * 100, metrics.cagr * 100],
-        itemStyle: { color: '#3b82f6' },
+        itemStyle: { color: C.portfolio },
       },
     ];
 
@@ -28,7 +29,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
       data.push({
         name: benchmarkName || 'Benchmark',
         value: [benchmarkMetrics.stdDevAnnualized * 100, benchmarkMetrics.cagr * 100],
-        itemStyle: { color: '#f97316' },
+        itemStyle: { color: C.series[1] },
       });
     }
 
@@ -46,7 +47,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
         nameGap: 25,
         nameTextStyle: { fontSize: 11 },
         axisLabel: { formatter: '{value}%', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       yAxis: {
         type: 'value',
@@ -55,7 +56,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
         nameGap: 40,
         nameTextStyle: { fontSize: 11 },
         axisLabel: { formatter: '{value}%', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       series: [
         {

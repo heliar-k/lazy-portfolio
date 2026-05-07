@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 import { runMonteCarlo } from '@/engine/monte-carlo';
+import { C } from '@/lib/chart-colors';
 
 interface MonteCarloChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
@@ -44,8 +45,8 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
         data: result.percentilePaths[90] || [],
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: 'rgba(59, 130, 246, 0.2)', width: 1 },
-        areaStyle: { color: 'rgba(59, 130, 246, 0.05)' },
+        lineStyle: { color: C.mc.upperBorder, width: 1 },
+        areaStyle: { color: C.mc.upperFillOuter },
         stack: 'confidence',
       },
       {
@@ -54,8 +55,8 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
         data: result.percentilePaths[75] || [],
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: 'rgba(59, 130, 246, 0.2)', width: 1 },
-        areaStyle: { color: 'rgba(59, 130, 246, 0.08)' },
+        lineStyle: { color: C.mc.upperBorder, width: 1 },
+        areaStyle: { color: C.mc.upperFillInner },
         stack: 'confidence',
       },
       {
@@ -64,7 +65,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
         data: result.percentilePaths[50] || [],
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#3b82f6', width: 2 },
+        lineStyle: { color: C.mc.median, width: 2 },
       },
       {
         name: '25th',
@@ -72,8 +73,8 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
         data: result.percentilePaths[25] || [],
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: 'rgba(239, 68, 68, 0.15)', width: 1 },
-        areaStyle: { color: 'rgba(239, 68, 68, 0.05)' },
+        lineStyle: { color: C.mc.lowerBorder, width: 1 },
+        areaStyle: { color: C.mc.lowerFillInner },
       },
       {
         name: '10th',
@@ -81,8 +82,8 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
         data: result.percentilePaths[10] || [],
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: 'rgba(239, 68, 68, 0.15)', width: 1 },
-        areaStyle: { color: 'rgba(239, 68, 68, 0.08)' },
+        lineStyle: { color: C.mc.lowerBorder, width: 1 },
+        areaStyle: { color: C.mc.lowerFillOuter },
       },
     ];
 
@@ -115,7 +116,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
           formatter: (v: number) => `$${(v / 1000).toFixed(0)}k`,
           fontSize: 10,
         },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       series,
     };

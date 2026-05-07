@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
+import { C } from '@/lib/chart-colors';
 
-const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#8b5cf6'];
+const COLORS = C.series;
 
 interface MultiEquityChartProps {
   series: { name: string; data: MonthlyTimeSeriesPoint[] }[];
@@ -64,7 +65,7 @@ export function MultiEquityChart({ series: inputSeries }: MultiEquityChartProps)
           formatter: (v: number) => `$${(v / 1000).toFixed(0)}k`,
           fontSize: 10,
         },
-        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        splitLine: { lineStyle: { color: C.grid } },
       },
       dataZoom: [
         {

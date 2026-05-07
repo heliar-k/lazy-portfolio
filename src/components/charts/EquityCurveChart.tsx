@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
+import { C } from '@/lib/chart-colors';
 
 interface EquityCurveChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
@@ -61,7 +62,7 @@ export function EquityCurveChart({
         data: values,
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#3b82f6', width: 2 },
+        lineStyle: { color: C.portfolio, width: 2 },
         xAxisIndex: 0,
         yAxisIndex: 0,
       },
@@ -71,7 +72,7 @@ export function EquityCurveChart({
         data: realValues,
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#93c5fd', width: 1.5, type: 'dashed' },
+        lineStyle: { color: C.portfolioReal, width: 1.5, type: 'dashed' },
         xAxisIndex: 0,
         yAxisIndex: 0,
       },
@@ -81,8 +82,8 @@ export function EquityCurveChart({
         data: drawdowns,
         smooth: false,
         symbol: 'none',
-        lineStyle: { color: '#ef4444', width: 1 },
-        areaStyle: { color: 'rgba(239, 68, 68, 0.15)' },
+        lineStyle: { color: C.drawdown, width: 1 },
+        areaStyle: { color: C.drawdownArea },
         xAxisIndex: 1,
         yAxisIndex: 1,
       },
@@ -99,7 +100,7 @@ export function EquityCurveChart({
         data: benchValues,
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#f97316', width: 2, type: 'dotted' },
+        lineStyle: { color: C.series[1], width: 2, type: 'dotted' },
         xAxisIndex: 0,
         yAxisIndex: 0,
       });
@@ -161,7 +162,7 @@ export function EquityCurveChart({
             formatter: (v: number) => `$${(v / 1000).toFixed(0)}k`,
             fontSize: 10,
           },
-          splitLine: { lineStyle: { color: '#f0f0f0' } },
+          splitLine: { lineStyle: { color: C.grid } },
         },
         {
           type: 'value',
@@ -171,7 +172,7 @@ export function EquityCurveChart({
             fontSize: 10,
           },
           inverse: true,
-          splitLine: { lineStyle: { color: '#f0f0f0' } },
+          splitLine: { lineStyle: { color: C.grid } },
         },
       ],
       dataZoom: [
