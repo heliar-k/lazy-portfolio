@@ -11,6 +11,7 @@ export function computeEffectiveWeights(
   monthlyReturns: (number | null)[][], // [assetIdx][monthIdx]
   strategy: RebalancingStrategy,
   months: string[],
+  cashflowMonths?: Set<string>, // months that have a cashflow (triggers rebalance next month)
 ): number[][] {
   const nAssets = holdings.length;
   const nMonths = months.length;
@@ -37,7 +38,11 @@ export function computeEffectiveWeights(
   );
 
   for (let m = 1; m < nMonths; m++) {
-    const shouldRebalance = checkRebalanceTrigger(
+    // Rebalance if the strategy triggers, OR if the previous month had a cashflow.
+    // A cashflow (deposit or withdrawal) is added to capital at month-end; rebalancing
+    // at the start of the next month ensures the new cash is invested at target weights.
+    const cashflowLastMonth = cashflowMonths != null && cashflowMonths.has(months[m - 1]);
+    const shouldRebalance = cashflowLastMonth || checkRebalanceTrigger(
       strategy,
       m,
       months,
