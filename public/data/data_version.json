@@ -1,4 +1,5 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-04"
+  "lastUpdated": "2026-05-04",
+  "description": "International proxy data from Yahoo Finance (real ETF data)"
 }

@@ -199,7 +199,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "Invesco",
-    "expenseRatio": 0.0020,
+    "expenseRatio": 0.002,
     "inceptionDate": "2003-04-24",
     "proxySymbol": "SP500_TR"
   },
@@ -235,7 +235,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "Invesco",
-    "expenseRatio": 0.0020,
+    "expenseRatio": 0.002,
     "inceptionDate": "1999-03-10",
     "proxySymbol": "SP500_TR"
   },
@@ -441,7 +441,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0008,
     "inceptionDate": "2005-03-04",
-    "proxySymbol": "MSCI_EAFE_TR"
+    "proxySymbol": "EURO_STOXX50_TR"
   },
   {
     "symbol": "VPL",
@@ -453,7 +453,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0008,
     "inceptionDate": "2005-03-04",
-    "proxySymbol": "MSCI_EAFE_TR"
+    "proxySymbol": "TOPIX_TR"
   },
   {
     "symbol": "SCZ",
@@ -487,9 +487,9 @@
     "region": "JP",
     "currency": "USD",
     "provider": "BlackRock",
-    "expenseRatio": 0.0050,
+    "expenseRatio": 0.005,
     "inceptionDate": "1996-03-12",
-    "proxySymbol": "MSCI_EAFE_TR"
+    "proxySymbol": "TOPIX_TR"
   },
   {
     "symbol": "EWL",
@@ -499,7 +499,7 @@
     "region": "EU",
     "currency": "USD",
     "provider": "BlackRock",
-    "expenseRatio": 0.0050,
+    "expenseRatio": 0.005,
     "inceptionDate": "1996-03-12",
     "proxySymbol": "MSCI_EAFE_TR"
   },
@@ -511,9 +511,9 @@
     "region": "UK",
     "currency": "USD",
     "provider": "BlackRock",
-    "expenseRatio": 0.0050,
+    "expenseRatio": 0.005,
     "inceptionDate": "1996-03-12",
-    "proxySymbol": "MSCI_EAFE_TR"
+    "proxySymbol": "FTSE100_TR"
   },
   {
     "symbol": "IMTM",
@@ -523,7 +523,7 @@
     "region": "GLOBAL",
     "currency": "USD",
     "provider": "BlackRock",
-    "expenseRatio": 0.0030,
+    "expenseRatio": 0.003,
     "inceptionDate": "2015-01-13",
     "proxySymbol": "MSCI_EAFE_TR"
   },
@@ -571,7 +571,7 @@
     "region": "GLOBAL",
     "currency": "USD",
     "provider": "BlackRock",
-    "expenseRatio": 0.0070,
+    "expenseRatio": 0.007,
     "inceptionDate": "2003-04-07",
     "proxySymbol": "MSCI_EM_TR"
   },
@@ -751,7 +751,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "State Street",
-    "expenseRatio": 0.0040,
+    "expenseRatio": 0.004,
     "inceptionDate": "2009-04-14",
     "proxySymbol": "US_AGG_BOND_TR"
   },
@@ -775,7 +775,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "State Street",
-    "expenseRatio": 0.0040,
+    "expenseRatio": 0.004,
     "inceptionDate": "2007-11-28",
     "proxySymbol": "US_AGG_BOND_TR"
   },
@@ -801,7 +801,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0007,
     "inceptionDate": "2013-05-31",
-    "proxySymbol": "US_AGG_BOND_TR"
+    "proxySymbol": "INTL_AGG_BOND_TR"
   },
   {
     "symbol": "EMB",
@@ -813,7 +813,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0039,
     "inceptionDate": "2007-12-17",
-    "proxySymbol": "US_AGG_BOND_TR"
+    "proxySymbol": "EM_BOND_TR"
   },
   {
     "symbol": "NUBD",
@@ -835,7 +835,7 @@
     "region": "GLOBAL",
     "currency": "USD",
     "provider": "State Street",
-    "expenseRatio": 0.0050,
+    "expenseRatio": 0.005,
     "inceptionDate": "2008-03-13",
     "proxySymbol": "US_AGG_BOND_TR"
   },
@@ -847,7 +847,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "State Street",
-    "expenseRatio": 0.0040,
+    "expenseRatio": 0.004,
     "inceptionDate": "2004-11-18",
     "proxySymbol": "GOLD_SPOT"
   },
@@ -859,7 +859,7 @@
     "region": "US",
     "currency": "USD",
     "provider": "abrdn",
-    "expenseRatio": 0.0060,
+    "expenseRatio": 0.006,
     "inceptionDate": "2010-10-22",
     "proxySymbol": "GOLD_SPOT"
   },
@@ -1054,5 +1054,101 @@
     "expenseRatio": 0.0095,
     "inceptionDate": "2010-01-19",
     "proxySymbol": "US_10Y_TR"
+  },
+  {
+    "symbol": "EWG",
+    "name": "iShares MSCI Germany ETF",
+    "nameZh": "iShares德国ETF",
+    "assetClass": "intl_developed",
+    "region": "EU",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.005,
+    "inceptionDate": "1996-03-12",
+    "proxySymbol": "EURO_STOXX50_TR"
+  },
+  {
+    "symbol": "EWC",
+    "name": "iShares MSCI Canada ETF",
+    "nameZh": "iShares加拿大ETF",
+    "assetClass": "intl_developed",
+    "region": "CA",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.005,
+    "inceptionDate": "1996-03-12",
+    "proxySymbol": "CANADA_EQUITY_TR"
+  },
+  {
+    "symbol": "EWA",
+    "name": "iShares MSCI Australia ETF",
+    "nameZh": "iShares澳大利亚ETF",
+    "assetClass": "intl_developed",
+    "region": "AU",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.005,
+    "inceptionDate": "1996-03-12",
+    "proxySymbol": "AUSTRALIA_EQUITY_TR"
+  },
+  {
+    "symbol": "FXI",
+    "name": "iShares China Large-Cap ETF",
+    "nameZh": "iShares中国大盘股ETF",
+    "assetClass": "intl_emerging",
+    "region": "CN",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.0074,
+    "inceptionDate": "2004-10-05",
+    "proxySymbol": "CSI300_TR"
+  },
+  {
+    "symbol": "EWZ",
+    "name": "iShares MSCI Brazil ETF",
+    "nameZh": "iShares巴西ETF",
+    "assetClass": "intl_emerging",
+    "region": "BR",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.0059,
+    "inceptionDate": "2000-07-10",
+    "proxySymbol": "BRAZIL_EQUITY_TR"
+  },
+  {
+    "symbol": "INDA",
+    "name": "iShares MSCI India ETF",
+    "nameZh": "iShares印度ETF",
+    "assetClass": "intl_emerging",
+    "region": "IN",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.0065,
+    "inceptionDate": "2012-02-02",
+    "proxySymbol": "INDIA_EQUITY_TR"
+  },
+  {
+    "symbol": "IGOV",
+    "name": "iShares International Treasury Bond ETF",
+    "nameZh": "iShares国际国债ETF",
+    "assetClass": "global_agg_bond",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.0035,
+    "inceptionDate": "2009-01-21",
+    "proxySymbol": "INTL_TREASURY_TR"
+  },
+  {
+    "symbol": "BWX",
+    "name": "SPDR Bloomberg International Treasury Bond ETF",
+    "nameZh": "SPDR国际国债ETF",
+    "assetClass": "global_agg_bond",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "State Street",
+    "expenseRatio": 0.0035,
+    "inceptionDate": "2007-10-02",
+    "proxySymbol": "INTL_GOVT_BOND_TR"
   }
 ]
