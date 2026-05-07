@@ -8,7 +8,8 @@
     "withdrawal": "Withdrawal",
     "unsavedChanges": "You have unsaved changes. Leave without saving?",
     "dataUpdated": "Data updated",
-    "refreshData": "Clear cache and refresh data"
+    "refreshData": "Clear browser cache and reload (does not update source data)",
+    "updateSourceData": "Run npm run update-data in terminal, or use GitHub Actions to update source data"
   },
   "builder": {
     "title": "Portfolio Builder",

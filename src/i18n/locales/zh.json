@@ -8,7 +8,8 @@
     "withdrawal": "提款分析",
     "unsavedChanges": "您有未保存的更改，确定离开吗？",
     "dataUpdated": "数据更新",
-    "refreshData": "清除缓存并刷新数据"
+    "refreshData": "清除浏览器缓存并重新加载（不更新源数据）",
+    "updateSourceData": "在终端运行 npm run update-data 或通过 GitHub Actions 更新源数据"
   },
   "builder": {
     "title": "组合构建器",
