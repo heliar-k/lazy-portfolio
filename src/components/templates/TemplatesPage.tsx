@@ -93,7 +93,7 @@ export function TemplatesPage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{t('templates.title')}</h1>
-        <span className="text-sm text-gray-400">{metadata.length} portfolios</span>
+        <span className="text-sm text-gray-400">{t('templates.portfolioCount', { count: metadata.length })}</span>
       </div>
 
       {/* Search + Filter */}
@@ -124,7 +124,7 @@ export function TemplatesPage() {
 
       {metadata.length === 0 && (
         <div className="text-center py-16 text-gray-400">
-          {isZh ? '没有匹配的组合模板' : 'No matching portfolio templates'}
+          {t('templates.noResults')}
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#8b5cf6'];
@@ -9,6 +10,7 @@ interface MultiEquityChartProps {
 }
 
 export function MultiEquityChart({ series: inputSeries }: MultiEquityChartProps) {
+  const { t } = useTranslation();
   const option = useMemo(() => {
     const validSeries = inputSeries.filter((s) => s.data.length > 0);
     if (validSeries.length === 0) return {};
@@ -79,7 +81,7 @@ export function MultiEquityChart({ series: inputSeries }: MultiEquityChartProps)
   if (inputSeries.every((s) => s.data.length === 0)) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-        <p>Run comparison to see equity curves</p>
+        <p>{t('chart.runComparisonFirst')}</p>
       </div>
     );
   }

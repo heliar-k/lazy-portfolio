@@ -87,7 +87,7 @@ export function AnnualReturnsChart({ result, status, brushWindow }: AnnualReturn
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Annual Returns</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('chart.annualReturns')}</h3>
       <ReactECharts option={option} style={{ height: 280 }} notMerge />
     </div>
   );

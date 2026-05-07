@@ -155,7 +155,7 @@ export function ParameterForm({
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">
-            Inflation
+            {t('backtest.inflation')}
           </label>
           <select
             value={inflationRegion}
@@ -191,7 +191,7 @@ export function ParameterForm({
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm
               focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">— None —</option>
+            <option value="">{t('backtest.noBenchmark')}</option>
             {BUILT_IN_BENCHMARKS.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}

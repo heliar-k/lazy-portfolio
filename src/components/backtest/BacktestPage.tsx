@@ -160,13 +160,13 @@ export function BacktestPage() {
       {brushWindow && (
         <div className="mt-4 flex items-center gap-2">
           <span className="text-xs text-gray-500">
-            Zoomed: {brushWindow.start} — {brushWindow.end}
+            {t('backtest.zoomed')}: {brushWindow.start} — {brushWindow.end}
           </span>
           <button
             onClick={handleResetZoom}
             className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
           >
-            Reset zoom
+            {t('backtest.resetZoom')}
           </button>
         </div>
       )}
@@ -177,7 +177,7 @@ export function BacktestPage() {
             onClick={handleExportCSV}
             className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
           >
-            Export CSV
+            {t('backtest.exportCsv')}
           </button>
         </div>
       )}

@@ -100,7 +100,7 @@ export function EtfSelector({ onSelect, selectedSymbols }: EtfSelectorProps) {
           );
         })}
         {availableEtfs.length === 0 && search && (
-          <p className="text-sm text-gray-400 text-center py-4">No ETFs found</p>
+          <p className="text-sm text-gray-400 text-center py-4">{t('common.noDataFound')}</p>
         )}
       </div>
     </div>

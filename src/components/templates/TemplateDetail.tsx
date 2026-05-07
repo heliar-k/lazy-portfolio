@@ -48,9 +48,9 @@ export function TemplateDetail() {
   if (!template || !meta) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
-        <p className="text-gray-500 text-lg">Template not found</p>
+        <p className="text-gray-500 text-lg">{t('templates.notFound')}</p>
         <button onClick={() => navigate('/templates')} className="mt-4 text-blue-600 hover:underline">
-          ← Back to templates
+          {t('templates.backToTemplates')}
         </button>
       </div>
     );
@@ -163,13 +163,13 @@ export function TemplateDetail() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {dataStatus === 'loading' ? (
               <div className="px-4 py-8 text-center text-sm text-gray-400 animate-pulse">
-                Loading holdings...
+                {t('templates.loadingHoldings')}
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">ETF</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">{t('templates.etfColumn')}</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">{t('builder.name')}</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-500">{t('builder.weight')}</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-500">{t('common.expenseRatio')}</th>

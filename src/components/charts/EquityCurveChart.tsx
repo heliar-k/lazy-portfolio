@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 
 interface EquityCurveChartProps {
@@ -17,6 +18,7 @@ export function EquityCurveChart({
   status,
   onBrush,
 }: EquityCurveChartProps) {
+  const { t } = useTranslation();
   const onEvents = useMemo(() => {
     if (!onBrush) return undefined;
     return {
@@ -46,15 +48,15 @@ export function EquityCurveChart({
     const realValues = timeSeries.map((p) => p.portfolioValueReal);
     const drawdowns = timeSeries.map((p) => p.drawdown * 100);
 
-    const legendData = ['Portfolio Value'];
+    const legendData = [t('chart.portfolioValue')];
     if (realValues.some((v) => v !== values.find((pv, i) => pv === timeSeries[i]?.portfolioValueReal))) {
-      legendData.push('Real Value (Inflation-Adjusted)');
+      legendData.push(t('chart.realValue'));
     }
-    legendData.push('Drawdown');
+    legendData.push(t('chart.drawdown'));
 
     const series: Record<string, unknown>[] = [
       {
-        name: 'Portfolio Value',
+        name: t('chart.portfolioValue'),
         type: 'line',
         data: values,
         smooth: true,
@@ -64,7 +66,7 @@ export function EquityCurveChart({
         yAxisIndex: 0,
       },
       {
-        name: 'Real Value (Inflation-Adjusted)',
+        name: t('chart.realValue'),
         type: 'line',
         data: realValues,
         smooth: true,
@@ -74,7 +76,7 @@ export function EquityCurveChart({
         yAxisIndex: 0,
       },
       {
-        name: 'Drawdown',
+        name: t('chart.drawdown'),
         type: 'line',
         data: drawdowns,
         smooth: false,
@@ -88,7 +90,7 @@ export function EquityCurveChart({
 
     // Add benchmark series if provided
     if (benchmarkTimeSeries && benchmarkTimeSeries.length > 0) {
-      const benchName = benchmarkName || 'Benchmark';
+      const benchName = benchmarkName || t('chart.benchmark');
       const benchValues = benchmarkTimeSeries.map((p) => p.portfolioValue);
       legendData.splice(1, 0, benchName);
       series.splice(1, 0, {
@@ -110,7 +112,7 @@ export function EquityCurveChart({
           if (!params || params.length === 0) return '';
           let html = `<strong>${params[0].axisValue}</strong><br/>`;
           for (const p of params) {
-            if (p.seriesName === 'Drawdown') {
+            if (p.seriesName === t('chart.drawdown')) {
               html += `${p.seriesName}: ${p.data.toFixed(2)}%<br/>`;
             } else {
               html += `${p.seriesName}: $${p.data.toLocaleString()}<br/>`;
@@ -183,12 +185,12 @@ export function EquityCurveChart({
       ],
       series,
     };
-  }, [timeSeries, benchmarkTimeSeries, benchmarkName]);
+  }, [timeSeries, benchmarkTimeSeries, benchmarkName, t]);
 
   if (status === 'idle') {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-        <p>Run a backtest to see the equity curve</p>
+        <p>{t('chart.runBacktestFirst')}</p>
       </div>
     );
   }

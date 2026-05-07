@@ -49,7 +49,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
 
     const series: Record<string, unknown>[] = [
       {
-        name: '3-Year Rolling',
+        name: t('chart.rolling3y'),
         type: 'line',
         data: rolling3Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
@@ -57,7 +57,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
         lineStyle: { color: '#3b82f6', width: 1.5 },
       },
       {
-        name: '5-Year Rolling',
+        name: t('chart.rolling5y'),
         type: 'line',
         data: rolling5Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
@@ -68,7 +68,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
 
     if (filtered.length >= 120) {
       series.push({
-        name: '10-Year Rolling',
+        name: t('chart.rolling10y'),
         type: 'line',
         data: rolling10Y.map((v) => (v !== null ? (v * 100).toFixed(2) : null)),
         smooth: true,
@@ -116,7 +116,7 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
       },
       series,
     };
-  }, [timeSeries, brushWindow]);
+  }, [timeSeries, brushWindow, t]);
 
   if (status === 'idle') {
     return (
@@ -141,14 +141,14 @@ export function RollingReturnsChart({ timeSeries, status, brushWindow }: Rolling
   if (!hasRolling) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-        <p>At least 3 years of data needed for rolling returns</p>
+        <p>{t('chart.needMoreData3y')}</p>
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Rolling Returns</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('chart.rollingReturns')}</h3>
       <ReactECharts option={option} style={{ height: 300 }} notMerge />
     </div>
   );

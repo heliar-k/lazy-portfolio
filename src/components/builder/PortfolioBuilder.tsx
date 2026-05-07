@@ -82,7 +82,7 @@ export function PortfolioBuilder() {
 
       {saved.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Saved Portfolios</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('builder.savedPortfolios')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {saved.map((p) => (
               <div
@@ -95,7 +95,7 @@ export function PortfolioBuilder() {
                 onClick={() => load(p.id)}
               >
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-sm">{p.name || 'Untitled'}</span>
+                  <span className="font-medium text-sm">{p.name || t('builder.untitled')}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

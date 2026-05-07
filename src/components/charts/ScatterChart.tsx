@@ -18,7 +18,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
 
     const data: { name: string; value: [number, number]; itemStyle: { color: string } }[] = [
       {
-        name: 'Portfolio',
+        name: t('chart.portfolio'),
         value: [metrics.stdDevAnnualized * 100, metrics.cagr * 100],
         itemStyle: { color: '#3b82f6' },
       },
@@ -50,7 +50,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
       },
       yAxis: {
         type: 'value',
-        name: 'CAGR',
+        name: t('chart.cagr'),
         nameLocation: 'center',
         nameGap: 40,
         nameTextStyle: { fontSize: 11 },
@@ -99,7 +99,7 @@ export function ScatterChart({ metrics, benchmarkMetrics, benchmarkName, status 
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Risk / Return</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('chart.riskReturn')}</h3>
       <ReactECharts option={option} style={{ height: 280 }} notMerge />
     </div>
   );

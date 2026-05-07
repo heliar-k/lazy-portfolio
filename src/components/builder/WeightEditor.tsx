@@ -63,7 +63,7 @@ export function WeightEditor({
             <button
               onClick={() => onRemove(h.asset.symbol)}
               className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-              title="Remove"
+              title={t('builder.remove')}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

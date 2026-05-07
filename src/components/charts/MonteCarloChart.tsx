@@ -33,7 +33,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
 
     const yearLabels: string[] = [];
     for (let y = 0; y <= years; y++) {
-      yearLabels.push(`Year ${y}`);
+      yearLabels.push(t('chart.year', { n: y }));
     }
 
     // Build fan chart: fill between percentiles
@@ -119,7 +119,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
       },
       series,
     };
-  }, [result, years]);
+  }, [result, years, t]);
 
   if (status === 'idle') {
     return (
@@ -140,7 +140,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
   if (!result || result.months === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-        <p>At least 1 year of data needed for Monte Carlo simulation</p>
+        <p>{t('chart.needMoreDataMC')}</p>
       </div>
     );
   }
@@ -148,7 +148,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Monte Carlo Simulation</h3>
+        <h3 className="text-sm font-semibold text-gray-700">{t('chart.monteCarlo')}</h3>
         <div className="flex items-center gap-3">
           <select
             value={years}
@@ -156,7 +156,7 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
             className="text-xs border border-gray-200 rounded px-2 py-1"
           >
             {[5, 10, 15, 20, 25, 30].map((y) => (
-              <option key={y} value={y}>{y} years</option>
+              <option key={y} value={y}>{y} {t('chart.years')}</option>
             ))}
           </select>
         </div>
@@ -164,13 +164,13 @@ export function MonteCarloChart({ timeSeries, initialCapital, status }: MonteCar
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-gray-50 rounded-lg p-2 text-center">
-          <div className="text-xs text-gray-500">Prob. Positive Return</div>
+          <div className="text-xs text-gray-500">{t('chart.probPositive')}</div>
           <div className="text-lg font-bold text-green-600">
             {(result.probabilityPositive * 100).toFixed(0)}%
           </div>
         </div>
         <div className="bg-gray-50 rounded-lg p-2 text-center">
-          <div className="text-xs text-gray-500">Prob. Beat 2% Inflation</div>
+          <div className="text-xs text-gray-500">{t('chart.probBeatInflation')}</div>
           <div className="text-lg font-bold text-blue-600">
             {(result.probabilityBeatInflation * 100).toFixed(0)}%
           </div>

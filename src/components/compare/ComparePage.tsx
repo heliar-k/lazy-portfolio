@@ -32,13 +32,13 @@ export function ComparePage() {
     if (portfolio) {
       setSlot(slotIndex, {
         id: portfolio.id,
-        name: portfolio.name || 'Untitled',
+        name: portfolio.name || t('compare.untitled'),
         status: 'empty',
         result: null,
       });
       setSlotResults((prev) => {
         const next = [...prev];
-        next[slotIndex] = { name: portfolio.name || 'Untitled', result: null, status: 'empty' };
+        next[slotIndex] = { name: portfolio.name || t('compare.untitled'), result: null, status: 'empty' };
         return next;
       });
     }
@@ -143,7 +143,7 @@ export function ComparePage() {
               onClick={() => {
                 clearAll();
                 setSlotResults(slots.map((_, i) => ({
-                  name: `Portfolio ${i + 1}`,
+                  name: t('compare.portfolioN', { n: i + 1 }),
                   result: null,
                   status: 'empty' as const,
                 })));
@@ -151,7 +151,7 @@ export function ComparePage() {
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800
                 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Clear All
+              {t('compare.clearAll')}
             </button>
           )}
           <button
@@ -161,7 +161,7 @@ export function ComparePage() {
               rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors"
           >
-            {isRunning ? 'Running...' : 'Compare'}
+            {isRunning ? t('compare.running') : t('compare.run')}
           </button>
         </div>
       </div>
@@ -186,15 +186,15 @@ export function ComparePage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
                 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">— Select —</option>
-              <optgroup label="Saved Portfolios">
+              <option value="">{t('compare.selectPlaceholder')}</option>
+              <optgroup label={t('compare.savedPortfolios')}>
                 {saved.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name || 'Untitled'} ({p.holdings.length})
+                    {p.name || t('compare.untitled')} ({p.holdings.length})
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Benchmarks">
+              <optgroup label={t('compare.benchmarks')}>
                 {[{ id: 'sp500', name: 'S&P 500' }, { id: '6040', name: '60/40' }, { id: 'us_bonds', name: 'US Bonds' }, { id: 'gold', name: 'Gold' }].map((b) => (
                   <option key={`bench-${b.id}`} value={`benchmark:${b.id}`}>
                     {b.name}
@@ -207,7 +207,7 @@ export function ComparePage() {
               <div className="mt-3 animate-pulse h-8 bg-gray-100 rounded" />
             )}
             {slotResults[i].status === 'error' && (
-              <div className="mt-3 text-sm text-red-500">Failed to run backtest</div>
+              <div className="mt-3 text-sm text-red-500">{t('compare.runFailed')}</div>
             )}
             {slot.id && slotResults[i].status !== 'loading' && (
               <div className="mt-3 flex justify-between items-center">
@@ -216,12 +216,12 @@ export function ComparePage() {
                   onClick={() => {
                     removeSlot(i);
                     const next = [...slotResults];
-                    next[i] = { name: `Portfolio ${i + 1}`, result: null, status: 'empty' };
+                    next[i] = { name: t('compare.portfolioN', { n: i + 1 }), result: null, status: 'empty' };
                     setSlotResults(next);
                   }}
                   className="text-xs text-red-500 hover:text-red-700"
                 >
-                  Remove
+                  {t('compare.remove')}
                 </button>
               </div>
             )}
@@ -247,7 +247,7 @@ export function ComparePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-semibold text-gray-700">Metric</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700">{t('compare.metric')}</th>
                 {slotResults.map((s, i) =>
                   s.status === 'ready' && s.result ? (
                     <th key={i} className="text-right px-4 py-3 font-semibold text-gray-700">
@@ -259,14 +259,14 @@ export function ComparePage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {[
-                { label: 'CAGR', get: (r: BacktestResult) => formatPct(r.metrics.cagr, locale), color: (r: BacktestResult) => r.metrics.cagr >= 0 ? 'text-green-600' : 'text-red-500' },
-                { label: 'Max Drawdown', get: (r: BacktestResult) => formatPct(r.metrics.maxDrawdown, locale), color: () => 'text-red-500' },
-                { label: 'Sharpe Ratio', get: (r: BacktestResult) => formatNumber(r.metrics.sharpeRatio, locale, 2), color: () => 'text-gray-900' },
-                { label: 'Std Dev', get: (r: BacktestResult) => formatPct(r.metrics.stdDevAnnualized, locale), color: () => 'text-gray-900' },
-                { label: 'Final Capital', get: (r: BacktestResult) => formatCurrency(r.metrics.finalCapital, 'USD', locale), color: () => 'text-gray-900' },
-                { label: 'Total Return', get: (r: BacktestResult) => formatPct(r.metrics.totalReturn, locale), color: (r: BacktestResult) => r.metrics.totalReturn >= 0 ? 'text-green-600' : 'text-red-500' },
-                { label: 'Best Year', get: (r: BacktestResult) => `${formatPct(r.metrics.bestYear.return, locale)} (${r.metrics.bestYear.year})`, color: () => 'text-green-600' },
-                { label: 'Worst Year', get: (r: BacktestResult) => `${formatPct(r.metrics.worstYear.return, locale)} (${r.metrics.worstYear.year})`, color: () => 'text-red-500' },
+                { label: t('metrics.cagr'), get: (r: BacktestResult) => formatPct(r.metrics.cagr, locale), color: (r: BacktestResult) => r.metrics.cagr >= 0 ? 'text-green-600' : 'text-red-500' },
+                { label: t('metrics.maxDrawdown'), get: (r: BacktestResult) => formatPct(r.metrics.maxDrawdown, locale), color: () => 'text-red-500' },
+                { label: t('metrics.sharpeRatio'), get: (r: BacktestResult) => formatNumber(r.metrics.sharpeRatio, locale, 2), color: () => 'text-gray-900' },
+                { label: t('metrics.stdDev'), get: (r: BacktestResult) => formatPct(r.metrics.stdDevAnnualized, locale), color: () => 'text-gray-900' },
+                { label: t('metrics.finalCapital'), get: (r: BacktestResult) => formatCurrency(r.metrics.finalCapital, 'USD', locale), color: () => 'text-gray-900' },
+                { label: t('metrics.totalReturn'), get: (r: BacktestResult) => formatPct(r.metrics.totalReturn, locale), color: (r: BacktestResult) => r.metrics.totalReturn >= 0 ? 'text-green-600' : 'text-red-500' },
+                { label: t('metrics.bestYear'), get: (r: BacktestResult) => `${formatPct(r.metrics.bestYear.return, locale)} (${r.metrics.bestYear.year})`, color: () => 'text-green-600' },
+                { label: t('metrics.worstYear'), get: (r: BacktestResult) => `${formatPct(r.metrics.worstYear.return, locale)} (${r.metrics.worstYear.year})`, color: () => 'text-red-500' },
               ].map((row) => (
                 <tr key={row.label} className="hover:bg-gray-50">
                   <td className="px-4 py-2.5 text-gray-600">{row.label}</td>
