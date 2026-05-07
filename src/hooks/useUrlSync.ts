@@ -4,7 +4,7 @@ import { useBacktestStore } from '@/stores/backtest-store';
 import { usePortfolioStore } from '@/stores/portfolio-store';
 import { useDataStore } from '@/stores/data-store';
 import { serializeBacktestParams, deserializeBacktestParams } from '@/lib/url-serializer';
-import { loadEtfMap } from '@/data/loader';
+import { loadEtfMap, loadDataVersion } from '@/data/loader';
 import type { PortfolioHolding } from '@/engine/types';
 
 /**
@@ -13,21 +13,23 @@ import type { PortfolioHolding } from '@/engine/types';
 export function useDataInit() {
   const etfMap = useDataStore((s) => s.etfMap);
   const setEtfMap = useDataStore((s) => s.setEtfMap);
+  const setDataVersion = useDataStore((s) => s.setDataVersion);
   const setReady = useDataStore((s) => s.setReady);
   const setError = useDataStore((s) => s.setError);
 
   useEffect(() => {
     if (etfMap.length > 0) return;
 
-    loadEtfMap()
-      .then((map) => {
+    Promise.all([loadEtfMap(), loadDataVersion()])
+      .then(([map, version]) => {
         setEtfMap(map);
+        setDataVersion(version);
         setReady();
       })
       .catch((err) => {
         setError((err as Error).message || 'Failed to load ETF data');
       });
-  }, [etfMap.length, setEtfMap, setReady, setError]);
+  }, [etfMap.length, setEtfMap, setDataVersion, setReady, setError]);
 }
 
 /**

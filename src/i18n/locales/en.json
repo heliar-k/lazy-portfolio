@@ -6,7 +6,9 @@
     "templates": "Templates",
     "market": "Market",
     "withdrawal": "Withdrawal",
-    "unsavedChanges": "You have unsaved changes. Leave without saving?"
+    "unsavedChanges": "You have unsaved changes. Leave without saving?",
+    "dataUpdated": "Data updated",
+    "refreshData": "Clear cache and refresh data"
   },
   "builder": {
     "title": "Portfolio Builder",
