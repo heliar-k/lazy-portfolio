@@ -48,6 +48,7 @@ interface ReferenceCase {
   site: string;
   url: string;
   retrievedAt: string;
+  description?: string;
   parameters: {
     startDate: string;
     endDate: string;
@@ -65,6 +66,7 @@ interface ReferenceCase {
     maxDrawdown?: number;
   };
   annualReturns?: Record<string, number>;
+  tolerances?: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,13 +203,14 @@ function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries:
   // Compare metrics
   const checks: MetricCheck[] = [];
   const ref = refCase.metrics;
+  const t = refCase.tolerances ?? {};
 
   checks.push({
     name: 'CAGR',
     ours: result.metrics.cagr,
     ref: ref.cagr,
-    tolerance: TOL.cagr,
-    passed: inTolerance(result.metrics.cagr, ref.cagr, TOL.cagr),
+    tolerance: t.cagr ?? TOL.cagr,
+    passed: inTolerance(result.metrics.cagr, ref.cagr, t.cagr ?? TOL.cagr),
   });
 
   if (ref.stdDevAnnualized !== undefined) {
@@ -215,8 +218,8 @@ function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries:
       name: 'StdDev',
       ours: result.metrics.stdDevAnnualized,
       ref: ref.stdDevAnnualized,
-      tolerance: TOL.stdDevAnnualized,
-      passed: inTolerance(result.metrics.stdDevAnnualized, ref.stdDevAnnualized, TOL.stdDevAnnualized),
+      tolerance: t.stdDevAnnualized ?? TOL.stdDevAnnualized,
+      passed: inTolerance(result.metrics.stdDevAnnualized, ref.stdDevAnnualized, t.stdDevAnnualized ?? TOL.stdDevAnnualized),
     });
   }
 
@@ -225,30 +228,32 @@ function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries:
       name: 'MaxDD',
       ours: result.metrics.maxDrawdown,
       ref: ref.maxDrawdown,
-      tolerance: TOL.maxDrawdown,
-      passed: inTolerance(result.metrics.maxDrawdown, ref.maxDrawdown, TOL.maxDrawdown),
+      tolerance: t.maxDrawdown ?? TOL.maxDrawdown,
+      passed: inTolerance(result.metrics.maxDrawdown, ref.maxDrawdown, t.maxDrawdown ?? TOL.maxDrawdown),
     });
   }
 
   if (ref.finalCapital !== undefined) {
     const oursFinal = result.timeSeries[result.timeSeries.length - 1]?.portfolioValue ?? 0;
     const ratio = oursFinal / ref.finalCapital;
+    const tol = t.finalCapital ?? TOL.finalCapital;
     checks.push({
       name: 'FinalCapital',
       ours: oursFinal,
       ref: ref.finalCapital,
-      tolerance: TOL.finalCapital,
-      passed: Math.abs(ratio - 1) <= TOL.finalCapital,
+      tolerance: tol,
+      passed: Math.abs(ratio - 1) <= tol,
     });
   }
 
   if (ref.totalReturn !== undefined) {
+    const tol = t.totalReturn ?? TOL.totalReturn;
     checks.push({
       name: 'TotalReturn',
       ours: result.metrics.totalReturn,
       ref: ref.totalReturn,
-      tolerance: TOL.totalReturn,
-      passed: inTolerance(result.metrics.totalReturn, ref.totalReturn, TOL.totalReturn),
+      tolerance: tol,
+      passed: inTolerance(result.metrics.totalReturn, ref.totalReturn, tol),
     });
   }
 
@@ -258,6 +263,7 @@ function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries:
     for (const ap of result.annualReturns) {
       annualMap.set(String(ap.year), ap.return_);
     }
+    const annTol = t.annualReturn ?? TOL.annualReturn;
     for (const [year, refReturn] of Object.entries(refCase.annualReturns)) {
       const oursReturn = annualMap.get(year);
       if (oursReturn !== undefined) {
@@ -265,8 +271,8 @@ function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries:
           name: `Annual ${year}`,
           ours: oursReturn,
           ref: refReturn,
-          tolerance: TOL.annualReturn,
-          passed: inTolerance(oursReturn, refReturn, TOL.annualReturn),
+          tolerance: annTol,
+          passed: inTolerance(oursReturn, refReturn, annTol),
         });
       }
     }

@@ -68,5 +68,86 @@
       "stdDevAnnualized": 0.152,
       "maxDrawdown": -0.238
     }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/stocks-bonds-60-40/",
+    "retrievedAt": "2026-05-05",
+    "description": "Stocks/Bonds 60/40 30-year view (1996-05 to 2026-04).",
+    "parameters": {
+      "startDate": "1996-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.6 },
+      { "symbol": "BND", "targetWeight": 0.4 }
+    ],
+    "metrics": {
+      "cagr": 0.0818,
+      "stdDevAnnualized": 0.0975,
+      "maxDrawdown": -0.3055
+    }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/ray-dalio-all-weather/",
+    "retrievedAt": "2026-05-05",
+    "description": "Ray Dalio All Weather 30-year view. IEI and DBC use non-blended proxies (US_10Y_TR, GOLD_SPOT). MaxDD may differ due to DBC proxy being gold-only instead of broad commodities.",
+    "parameters": {
+      "startDate": "1996-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.3 },
+      { "symbol": "TLT", "targetWeight": 0.4 },
+      { "symbol": "IEI", "targetWeight": 0.15 },
+      { "symbol": "DBC", "targetWeight": 0.075 },
+      { "symbol": "GLD", "targetWeight": 0.075 }
+    ],
+    "metrics": {
+      "cagr": 0.0743,
+      "stdDevAnnualized": 0.0750,
+      "maxDrawdown": -0.2058
+    },
+    "tolerances": {
+      "maxDrawdown": 0.05
+    }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/golden-butterfly/",
+    "retrievedAt": "2026-05-05",
+    "description": "Tyler Golden Butterfly 30-year view. IJS uses SP500_TR proxy (small-cap value vs large-cap blend). StdDev may differ due to proxy mismatch.",
+    "parameters": {
+      "startDate": "1996-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.2 },
+      { "symbol": "IJS", "targetWeight": 0.2 },
+      { "symbol": "SHY", "targetWeight": 0.2 },
+      { "symbol": "TLT", "targetWeight": 0.2 },
+      { "symbol": "GLD", "targetWeight": 0.2 }
+    ],
+    "metrics": {
+      "cagr": 0.0805,
+      "stdDevAnnualized": 0.0797,
+      "maxDrawdown": -0.1779
+    },
+    "tolerances": {
+      "stdDevAnnualized": 0.015
+    }
   }
 ]
