@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RebalancingStrategy, DisplayCurrency, Region } from '@/engine/types';
 
@@ -57,6 +58,7 @@ export function ParameterForm({
   isRunning,
 }: ParameterFormProps) {
   const { t } = useTranslation();
+  const [localCapital, setLocalCapital] = useState<string | null>(null);
 
   const rebalanceOptions: { value: string; label: string; strategy: RebalancingStrategy }[] = [
     { value: 'monthly', label: t('rebalance.monthly'), strategy: { type: 'calendar', frequency: 'monthly' } },
@@ -100,8 +102,18 @@ export function ParameterForm({
           <input
             type="number"
             min={1}
-            value={initialCapital}
-            onChange={(e) => onCapitalChange(Math.max(1, parseInt(e.target.value) || 0))}
+            value={localCapital ?? initialCapital}
+            onChange={(e) => {
+              setLocalCapital(e.target.value);
+              const v = parseInt(e.target.value);
+              if (!isNaN(v) && v >= 1) onCapitalChange(v);
+            }}
+            onBlur={(e) => {
+              const v = parseInt(e.target.value);
+              if (!isNaN(v) && v >= 1) onCapitalChange(v);
+              else onCapitalChange(Math.max(1, initialCapital));
+              setLocalCapital(null);
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
               focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
