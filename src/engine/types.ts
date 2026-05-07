@@ -35,7 +35,7 @@ export type AssetClass =
   | 'gold'
   | 'commodities';
 
-export type Region = 'US' | 'CN' | 'JP' | 'EU' | 'UK' | 'GLOBAL';
+export type Region = 'US' | 'CN' | 'JP' | 'EU' | 'UK' | 'CA' | 'AU' | 'BR' | 'IN' | 'GLOBAL';
 
 export type DisplayCurrency = 'USD' | 'CNY' | 'EUR' | 'JPY' | 'GBP';
 
