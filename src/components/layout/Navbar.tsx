@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useDataStore } from '@/stores/data-store';
 import { clearCache } from '@/data/loader';
 import { clearBacktestCache } from '@/lib/cache';
+import { APP_VERSION } from '@/version';
 
 async function clearAllCachesAndReload() {
   // Clear localStorage backtest cache
@@ -48,6 +49,9 @@ export function Navbar() {
         <div className="flex items-center gap-1">
           <span className="mr-4 text-lg font-bold text-slate-900">
             Lazy Portfolio
+          </span>
+          <span className="mr-4 text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+            v{APP_VERSION}
           </span>
           <NavLink to="/" className={linkClass} end>
             {t('nav.builder')}

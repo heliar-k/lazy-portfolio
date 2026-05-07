@@ -11,6 +11,7 @@ import { runBacktest } from '../engine/backtest.js';
 import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
 import { computeSWR } from '../engine/withdrawal.js';
 import { loadCustomPortfolios, addCustomPortfolio, updateCustomPortfolio, deleteCustomPortfolio, loadPreferences, savePreferences } from './custom-store.js';
+import { APP_VERSION } from '../version.js';
 import type {
   PortfolioDefinition,
   PortfolioHolding,
@@ -945,7 +946,10 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
 function HomeView({ onSelect }: { onSelect: (action: 'backtest' | 'manage' | 'swr' | 'theme') => void }) {
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold>Select Mode</Text>
+      <Box>
+        <Text bold>Lazy Portfolio </Text>
+        <Text dimColor>v{APP_VERSION}</Text>
+      </Box>
       <Box marginTop={1}>
         <SelectInput
           items={[
