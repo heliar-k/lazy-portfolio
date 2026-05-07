@@ -113,6 +113,7 @@ export function runBacktest(
       [point.portfolioValue, point.portfolioValueReal] = [point.portfolioValueReal, point.portfolioValue];
       [point.monthlyReturn, point.monthlyReturnReal] = [point.monthlyReturnReal, point.monthlyReturn];
     }
+    timeSeries = recomputePathDerivedFields(timeSeries, initialCapital);
   }
 
   // 8. Compute summary metrics
@@ -247,6 +248,29 @@ function assertNoMissingReturnsAfterStart(
       }
     }
   }
+}
+
+function recomputePathDerivedFields(
+  timeSeries: MonthlyTimeSeriesPoint[],
+  initialCapital: number,
+): MonthlyTimeSeriesPoint[] {
+  let peak = initialCapital;
+
+  return timeSeries.map((point) => {
+    const portfolioValue = point.portfolioValue;
+    if (portfolioValue > peak) peak = portfolioValue;
+
+    const drawdown = peak > 0 ? (portfolioValue - peak) / peak : 0;
+    const cumulativeReturn = initialCapital > 0
+      ? (portfolioValue / initialCapital) - 1
+      : 0;
+
+    return {
+      ...point,
+      drawdown,
+      cumulativeReturn,
+    };
+  });
 }
 
 function computeReturnDistribution(

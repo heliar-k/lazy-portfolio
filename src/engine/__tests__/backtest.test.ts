@@ -169,6 +169,65 @@ describe('runBacktest', () => {
     expect(result.timeSeries[3].drawdown).toBeLessThan(0);
   });
 
+  it('recomputes cumulative return from real values when inflation adjusted', () => {
+    const params = makeParams({
+      startDate: '2020-01',
+      endDate: '2020-02',
+      initialCapital: 1000,
+      inflationAdjusted: true,
+      portfolio: {
+        id: 'real-cumulative',
+        name: 'Real Cumulative',
+        holdings: [{ asset: makeAsset('CASH'), targetWeight: 1 }],
+        tags: [],
+      },
+    });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('CASH', [
+      { date: '2020-01-31', totalReturn: 0 },
+      { date: '2020-02-29', totalReturn: 0 },
+    ]);
+
+    const cpi = new Map<string, number>();
+    cpi.set('2020-01-31', 100);
+    cpi.set('2020-02-29', 110);
+
+    const result = runBacktest(params, assetReturns, new Map(), cpi);
+
+    expect(result.timeSeries[1].portfolioValue).toBeCloseTo(909.09, 2);
+    expect(result.timeSeries[1].cumulativeReturn).toBeCloseTo(-0.0909, 4);
+  });
+
+  it('recomputes drawdown from real values when inflation adjusted', () => {
+    const params = makeParams({
+      startDate: '2020-01',
+      endDate: '2020-02',
+      initialCapital: 1000,
+      inflationAdjusted: true,
+      portfolio: {
+        id: 'real-drawdown',
+        name: 'Real Drawdown',
+        holdings: [{ asset: makeAsset('CASH'), targetWeight: 1 }],
+        tags: [],
+      },
+    });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('CASH', [
+      { date: '2020-01-31', totalReturn: 0 },
+      { date: '2020-02-29', totalReturn: 0 },
+    ]);
+
+    const cpi = new Map<string, number>();
+    cpi.set('2020-01-31', 100);
+    cpi.set('2020-02-29', 110);
+
+    const result = runBacktest(params, assetReturns, new Map(), cpi);
+
+    expect(result.timeSeries[1].drawdown).toBeCloseTo(-0.0909, 4);
+  });
+
   it('rebalances annually', () => {
     // Use 24 months to test annual rebalancing
     const params = makeParams({ startDate: '2020-01', endDate: '2021-12' });
