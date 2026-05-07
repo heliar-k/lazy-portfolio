@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSWR } from '../withdrawal';
+import { computeSWR, getCPI, getStartDates } from '../withdrawal';
 import type { MonthlyReturnPoint, PortfolioHolding } from '../types';
 
 function makeHolding(): PortfolioHolding {
@@ -48,6 +48,55 @@ function formatLocalDate(date: Date): string {
 }
 
 describe('computeSWR', () => {
+  it('gets CPI by month key, dated month key, or nearest prior CPI', () => {
+    const cpi = new Map<string, number>();
+    cpi.set('1999-12-31', 95);
+    cpi.set('2000-01-15', 99);
+    cpi.set('2000-01-31', 100);
+    cpi.set('2000-03', 103);
+
+    expect(getCPI(cpi, '2000-01')).toBe(100);
+    expect(getCPI(cpi, '2000-02')).toBe(100);
+    expect(getCPI(cpi, '2000-03')).toBe(103);
+    expect(getCPI(cpi, '1999-01')).toBeNull();
+  });
+
+  it('generates monthly start periods with complete retirement windows', () => {
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('CASH', makeReturns(2000, 1));
+
+    expect(getStartDates(assetReturns, 1)).toEqual(['2000-01']);
+
+    assetReturns.set('CASH', [
+      ...makeReturns(2000, 1),
+      { date: '2001-02-28', totalReturn: 0 },
+    ]);
+
+    expect(getStartDates(assetReturns, 1)).toEqual(['2000-01', '2000-02']);
+  });
+
+  it('includes monthly SWR start periods and excludes incomplete windows', () => {
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('CASH', [
+      ...makeReturns(2000, 1),
+      { date: '2001-02-28', totalReturn: 0 },
+    ]);
+
+    const result = computeSWR(
+      [makeHolding()],
+      assetReturns,
+      makeCpi(2000, 2),
+      {
+        retirementYears: 1,
+        initialCapital: 1000,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        ratesToTest: [0.04],
+      },
+    );
+
+    expect(result.sweepResults.map((row) => row.startDate)).toEqual(['2000-01', '2000-02']);
+  });
+
   it('marks a period failed when planned withdrawals are not fully applied', () => {
     const assetReturns = new Map<string, MonthlyReturnPoint[]>();
     assetReturns.set('CASH', makeReturns(2000, 3));

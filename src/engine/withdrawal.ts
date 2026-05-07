@@ -26,38 +26,26 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** Get list of possible retirement start years given data range and retirement duration */
-function getStartDates(
+export function getStartDates(
   assetReturns: Map<string, MonthlyReturnPoint[]>,
   retirementYears: number,
 ): string[] {
-  // Find the earliest date all assets have data, and the latest date with enough remaining data
-  let dataStart: string | null = null;
-  let dataEnd: string | null = null;
+  const assetMonthSets = Array.from(assetReturns.values())
+    .map((returns) => new Set(
+      returns
+        .filter((r) => r.totalReturn !== null)
+        .map((r) => r.date.slice(0, 7)),
+    ))
+    .filter((months) => months.size > 0);
 
-  for (const returns of Array.from(assetReturns.values())) {
-    const valid = returns.filter(r => r.totalReturn !== null);
-    if (valid.length === 0) continue;
-    if (!dataStart || valid[0].date > dataStart) dataStart = valid[0].date;
-    if (!dataEnd || valid[valid.length - 1].date < dataEnd) dataEnd = valid[valid.length - 1].date;
-  }
+  if (assetMonthSets.length === 0) return [];
 
-  if (!dataStart || !dataEnd) return [];
+  const commonMonths = Array.from(assetMonthSets[0])
+    .filter((month) => assetMonthSets.every((months) => months.has(month)))
+    .sort();
 
-  const startYear = parseInt(dataStart.substring(0, 4));
-  const startMonth = parseInt(dataStart.substring(5, 7));
-  const endYear = parseInt(dataEnd.substring(0, 4));
-
-  // Latest start year: enough data for full retirement period
-  const latestStartYear = endYear - retirementYears;
-
-  // Use "YYYY-MM" format (buildMonthGrid appends "-01" to handle it)
-  const dates: string[] = [];
-  for (let y = startYear; y <= latestStartYear; y++) {
-    const m = y === startYear ? startMonth : 1;
-    dates.push(`${y}-${String(m).padStart(2, '0')}`);
-  }
-
-  return dates;
+  const requiredForwardMonths = retirementYears * 12;
+  return commonMonths.filter((_month, index) => index + requiredForwardMonths < commonMonths.length);
 }
 
 /** Add years to a "YYYY-MM" date string */
@@ -66,8 +54,16 @@ function addYears(dateStr: string, years: number): string {
   return `${y + years}-${String(m).padStart(2, '0')}`;
 }
 /** Get CPI value at or before a given date */
-function getCPI(cpiSeries: Map<string, number>, date: string): number | null {
+export function getCPI(cpiSeries: Map<string, number>, date: string): number | null {
   if (cpiSeries.has(date)) return cpiSeries.get(date)!;
+
+  const month = date.slice(0, 7);
+  const sameMonthDates = Array.from(cpiSeries.keys())
+    .filter((key) => key.slice(0, 7) === month)
+    .sort();
+  if (sameMonthDates.length > 0) {
+    return cpiSeries.get(sameMonthDates[sameMonthDates.length - 1])!;
+  }
 
   // Search backwards for nearest CPI value
   const dates = Array.from(cpiSeries.keys()).sort();
