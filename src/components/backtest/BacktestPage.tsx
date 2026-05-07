@@ -1,128 +1,245 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBacktestStore } from '@/stores/backtest-store';
 import { usePortfolioStore } from '@/stores/portfolio-store';
+import { useDataStore } from '@/stores/data-store';
 import { useBacktest } from '@/hooks/useBacktest';
-import { getBenchmark } from '@/benchmarks/definitions';
-import { runBenchmarkBacktest } from '@/benchmarks/runner';
+import { getTemplateMetadata } from '@/portfolios/registry';
 import { ParameterForm } from '@/components/backtest/ParameterForm';
 import { CashflowEditor } from '@/components/backtest/CashflowEditor';
+import { ComparisonPanel } from '@/components/backtest/ComparisonPanel';
+import { ComparisonTable } from '@/components/backtest/ComparisonTable';
 import { ResultsDashboard } from '@/components/backtest/ResultsDashboard';
 import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
+import { MultiEquityChart } from '@/components/charts/MultiEquityChart';
 import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 import { ScatterChart } from '@/components/charts/ScatterChart';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { timeSeriesToCSV, downloadCSV } from '@/lib/export-csv';
-import type { BacktestParameters, PortfolioDefinition } from '@/engine/types';
+import type { BacktestParameters, BacktestResult, PortfolioDefinition } from '@/engine/types';
+import type { CompSlot } from '@/components/backtest/ComparisonPanel';
+import type { CompEntry } from '@/components/backtest/ComparisonTable';
+import { BUILT_IN_BENCHMARKS } from '@/benchmarks/definitions';
 
 type BrushWindow = { start: string; end: string } | null;
 
-function paramsSignature(params: BacktestParameters, portfolio: PortfolioDefinition): string {
-  const holdings = portfolio.holdings.map(h => `${h.asset.symbol}:${h.targetWeight}`).join(',');
-  const rebal = params.rebalancing.type === 'calendar'
-    ? `cal:${params.rebalancing.frequency}`
-    : `band:${(params.rebalancing as { type: 'tolerance_band'; threshold: number }).threshold}`;
-  return [holdings, params.startDate, params.endDate, params.initialCapital, params.displayCurrency,
-    params.inflationRegion, String(params.inflationAdjusted), rebal].join('|');
+interface CompResult {
+  id: string;
+  name: string;
+  result: BacktestResult | null;
+  status: 'idle' | 'running' | 'ready' | 'error';
+}
+
+function paramsSignature(
+  params: BacktestParameters,
+  portfolio: PortfolioDefinition,
+  compSlots: CompSlot[],
+): string {
+  const holdings = portfolio.holdings.map((h) => `${h.asset.symbol}:${h.targetWeight}`).join(',');
+  const rebal =
+    params.rebalancing.type === 'calendar'
+      ? `cal:${params.rebalancing.frequency}`
+      : `band:${(params.rebalancing as { type: 'tolerance_band'; threshold: number }).threshold}`;
+  const slots = compSlots.map((s) => s.id).join('+');
+  return [
+    holdings,
+    params.startDate,
+    params.endDate,
+    params.initialCapital,
+    params.displayCurrency,
+    params.inflationRegion,
+    String(params.inflationAdjusted),
+    rebal,
+    slots,
+  ].join('|');
+}
+
+async function runSlotBacktest(
+  slot: CompSlot,
+  params: BacktestParameters,
+  etfMap: { symbol: string; name: string; nameZh?: string; assetClass: string; region: string; currency: string; provider: string; expenseRatio: number; inceptionDate: string }[],
+  templates: ReturnType<typeof getTemplateMetadata>,
+  saved: PortfolioDefinition[],
+): Promise<BacktestResult> {
+  if (slot.id.startsWith('bench:')) {
+    const benchId = slot.id.replace('bench:', '');
+    const benchmark = BUILT_IN_BENCHMARKS.find((b) => b.id === benchId);
+    if (!benchmark) throw new Error('Benchmark not found');
+    const { runBenchmarkBacktest: run } = await import('@/benchmarks/runner');
+    return run({ ...params, portfolio: { id: '', name: '', holdings: [], tags: [] } }, benchmark);
+  }
+
+  let portfolio: PortfolioDefinition;
+
+  if (slot.id.startsWith('template:')) {
+    const tplId = slot.id.replace('template:', '');
+    const tpl = templates.find((t) => t.id === tplId);
+    if (!tpl) throw new Error('Template not found');
+    const lookup = new Map(etfMap.map((e) => [e.symbol, e]));
+    portfolio = {
+      id: tpl.id,
+      name: tpl.name,
+      holdings: tpl.holdings
+        .map((h) => {
+          const e = lookup.get(h.symbol);
+          if (!e) return null;
+          return {
+            asset: {
+              symbol: e.symbol,
+              name: e.name,
+              nameZh: e.nameZh,
+              assetClass: e.assetClass as PortfolioDefinition['holdings'][0]['asset']['assetClass'],
+              region: e.region as PortfolioDefinition['holdings'][0]['asset']['region'],
+              currency: e.currency,
+              provider: e.provider,
+              expenseRatio: e.expenseRatio,
+              inceptionDate: e.inceptionDate,
+            },
+            targetWeight: h.weight,
+          };
+        })
+        .filter((h): h is NonNullable<typeof h> => h !== null),
+      tags: [],
+    };
+  } else {
+    const found = saved.find((p) => p.id === slot.id);
+    if (!found) throw new Error('Portfolio not found');
+    portfolio = found;
+  }
+
+  const { runBacktest } = await import('@/engine/backtest');
+  const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } = await import('@/data/proxy-registry');
+  const backtestParams: BacktestParameters = { ...params, portfolio };
+  const assetReturns = await resolvePortfolioReturns(portfolio.holdings);
+  const cpiSeries = await resolveCpiSeries(params.inflationRegion);
+  const fxRates = new Map<string, (number | null)[]>();
+  for (const holding of portfolio.holdings) {
+    if (holding.asset.currency !== params.displayCurrency) {
+      const rates = await resolveFxRates(holding.asset.currency, params.displayCurrency);
+      fxRates.set(`${holding.asset.currency}${params.displayCurrency}`, rates);
+    }
+  }
+  return runBacktest(backtestParams, assetReturns, fxRates, cpiSeries);
 }
 
 export function BacktestPage() {
   const { t } = useTranslation();
-  const { params, result, benchmarkId, benchmarkResult, status,
+  const { params, result, status,
     setStartDate, setEndDate, setInitialCapital,
     setRebalancing, setDisplayCurrency, setInflationRegion, setInflationAdjusted,
-    setCashflows, setPortfolio, setBenchmarkId, setBenchmarkResult,
+    setCashflows, setPortfolio,
     setResult, setRunning, setError } = useBacktestStore();
   const { current: portfolio } = usePortfolioStore();
-  const { result: hookResult, status: hookStatus, errorMessage: hookError,
-    run, reset: _reset } = useBacktest();
+  const { etfMap } = useDataStore();
+  const { result: hookResult, status: hookStatus, errorMessage: hookError, run } = useBacktest();
+
+  const templates = useMemo(() => getTemplateMetadata(), []);
+  const { saved } = usePortfolioStore();
 
   const [brushWindow, setBrushWindow] = useState<BrushWindow>(null);
   const [lastRunSignature, setLastRunSignature] = useState<string | null>(null);
+  const [compSlots, setCompSlots] = useState<CompSlot[]>([]);
+  const [compResults, setCompResults] = useState<CompResult[]>([]);
 
-  // Clear brush when new backtest starts
   useEffect(() => {
-    if (hookStatus === 'running') {
-      setBrushWindow(null);
-    }
+    if (hookStatus === 'running') setBrushWindow(null);
   }, [hookStatus]);
 
-  // Sync portfolio into backtest params
-  useEffect(() => {
-    setPortfolio(portfolio);
-  }, [portfolio, setPortfolio]);
+  useEffect(() => { setPortfolio(portfolio); }, [portfolio, setPortfolio]);
 
-  // Sync hook results back to store
   useEffect(() => {
-    if (hookResult && hookStatus === 'ready') {
-      setResult(hookResult);
-    }
+    if (hookResult && hookStatus === 'ready') setResult(hookResult);
   }, [hookResult, hookStatus, setResult]);
 
   useEffect(() => {
-    if (hookError && hookStatus === 'error') {
-      setError(hookError);
-    }
+    if (hookError && hookStatus === 'error') setError(hookError);
   }, [hookError, hookStatus, setError]);
 
   useEffect(() => {
-    if (hookStatus === 'running') {
-      setRunning();
-    }
+    if (hookStatus === 'running') setRunning();
   }, [hookStatus, setRunning]);
+
+  // Clear comparison results when slots change
+  useEffect(() => {
+    setCompResults(compSlots.map((s) => ({ ...s, result: null, status: 'idle' })));
+  }, [compSlots]);
 
   const handleRunBacktest = useCallback(async () => {
     const backtestParams = { ...params, portfolio };
-    setLastRunSignature(paramsSignature(params, portfolio));
+    setLastRunSignature(paramsSignature(params, portfolio, compSlots));
+
+    // Mark comparison slots as running
+    if (compSlots.length > 0) {
+      setCompResults(compSlots.map((s) => ({ ...s, result: null, status: 'running' })));
+    }
+
     await run(backtestParams);
 
-    // Run benchmark if selected
-    if (benchmarkId) {
-      const benchmark = getBenchmark(benchmarkId);
-      if (benchmark) {
+    // Run comparison slots sequentially
+    if (compSlots.length > 0) {
+      const results: CompResult[] = [];
+      for (let i = 0; i < compSlots.length; i++) {
+        const slot = compSlots[i];
         try {
-          const benchResult = await runBenchmarkBacktest(backtestParams, benchmark);
-          setBenchmarkResult(benchResult);
+          const slotResult = await runSlotBacktest(slot, backtestParams, etfMap, templates, saved);
+          results.push({ ...slot, result: slotResult, status: 'ready' });
         } catch {
-          setBenchmarkResult(null);
+          results.push({ ...slot, result: null, status: 'error' });
         }
+        setCompResults([
+          ...results,
+          ...compSlots.slice(results.length).map((s) => ({ ...s, result: null, status: 'running' as const })),
+        ]);
       }
-    } else {
-      setBenchmarkResult(null);
+      setCompResults(results);
     }
-  }, [params, portfolio, benchmarkId, run, setBenchmarkResult]);
-
-  const handleBenchmarkChange = useCallback((id: string | null) => {
-    setBenchmarkId(id);
-    if (!id) setBenchmarkResult(null);
-  }, [setBenchmarkId, setBenchmarkResult]);
+  }, [params, portfolio, compSlots, run, etfMap, templates, saved]);
 
   const handleBrush = useCallback((start: string | null, end: string | null) => {
-    if (start && end) {
-      setBrushWindow({ start, end });
-    } else {
-      setBrushWindow(null);
-    }
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setBrushWindow(null);
+    if (start && end) setBrushWindow({ start, end });
+    else setBrushWindow(null);
   }, []);
 
   const handleExportCSV = useCallback(() => {
     if (!result || result.timeSeries.length === 0) return;
-    const csv = timeSeriesToCSV(
-      result.timeSeries,
-      benchmarkResult?.timeSeries,
-      benchmarkResult?.parameters.portfolio.name,
-    );
-    const date = new Date().toISOString().slice(0, 10);
-    downloadCSV(csv, `backtest-${date}.csv`);
-  }, [result, benchmarkResult]);
+    const csv = timeSeriesToCSV(result.timeSeries);
+    downloadCSV(csv, `backtest-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [result]);
 
   const canRun = portfolio.holdings.length > 0;
+  const isRunning = status === 'running' || compResults.some((r) => r.status === 'running');
+  const isStale =
+    status === 'ready' &&
+    result &&
+    lastRunSignature !== null &&
+    lastRunSignature !== paramsSignature(params, portfolio, compSlots);
+
+  const hasComparison = compSlots.length > 0;
+
+  // Build comparison entries (primary + ready comparison slots)
+  const primaryName = portfolio.name || t('builder.untitled');
+  const compEntries: CompEntry[] = useMemo(() => {
+    if (!result || status !== 'ready') return [];
+    const entries: CompEntry[] = [{ name: primaryName, metrics: result.metrics, isPrimary: true }];
+    for (const cr of compResults) {
+      if (cr.status === 'ready' && cr.result) {
+        entries.push({ name: cr.name, metrics: cr.result.metrics });
+      }
+    }
+    return entries;
+  }, [result, status, compResults, primaryName]);
+
+  // Build overlay series for multi-equity chart
+  const allSeries = useMemo(() => {
+    if (!result) return [];
+    const series = [{ name: primaryName, data: result.timeSeries }];
+    for (const cr of compResults) {
+      if (cr.result) series.push({ name: cr.name, data: cr.result.timeSeries });
+    }
+    return series;
+  }, [result, compResults, primaryName]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -136,7 +253,6 @@ export function BacktestPage() {
         displayCurrency={params.displayCurrency}
         inflationRegion={params.inflationRegion}
         inflationAdjusted={params.inflationAdjusted}
-        benchmarkId={benchmarkId}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onCapitalChange={setInitialCapital}
@@ -144,17 +260,17 @@ export function BacktestPage() {
         onCurrencyChange={setDisplayCurrency}
         onInflationChange={setInflationRegion}
         onInflationAdjustedChange={setInflationAdjusted}
-        onBenchmarkChange={handleBenchmarkChange}
         onRun={handleRunBacktest}
         canRun={canRun}
-        isRunning={status === 'running'}
+        isRunning={isRunning}
       />
 
       <div className="mt-4">
-        <CashflowEditor
-          cashflows={params.cashflows}
-          onChange={setCashflows}
-        />
+        <CashflowEditor cashflows={params.cashflows} onChange={setCashflows} />
+      </div>
+
+      <div className="mt-4">
+        <ComparisonPanel slots={compSlots} onChange={setCompSlots} />
       </div>
 
       {brushWindow && (
@@ -163,7 +279,7 @@ export function BacktestPage() {
             {t('backtest.zoomed')}: {brushWindow.start} — {brushWindow.end}
           </span>
           <button
-            onClick={handleResetZoom}
+            onClick={() => setBrushWindow(null)}
             className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
           >
             {t('backtest.resetZoom')}
@@ -182,15 +298,13 @@ export function BacktestPage() {
         </div>
       )}
 
-      {status === 'ready' && result && lastRunSignature !== null && lastRunSignature !== paramsSignature(params, portfolio) && (
+      {isStale && (
         <div className="mt-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
           <span className="text-amber-600 text-sm">⚠</span>
-          <span className="text-sm text-amber-700">
-            {t('backtest.paramsChanged')}
-          </span>
+          <span className="text-sm text-amber-700">{t('backtest.paramsChanged')}</span>
           <button
             onClick={handleRunBacktest}
-            disabled={!canRun || hookStatus === 'running'}
+            disabled={!canRun || isRunning}
             className="ml-auto text-xs px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors disabled:opacity-40"
           >
             {t('backtest.run')}
@@ -199,51 +313,53 @@ export function BacktestPage() {
       )}
 
       <div className="mt-6 space-y-6">
-        <ResultsDashboard
-          metrics={result?.metrics ?? null}
-          benchmarkMetrics={benchmarkResult?.metrics ?? null}
-          benchmarkName={benchmarkResult?.parameters.portfolio.name}
-          status={status}
-        />
+        {/* Comparison mode: full 12-metric table */}
+        {hasComparison ? (
+          <>
+            {compEntries.length > 0 && <ComparisonTable entries={compEntries} />}
 
-        <EquityCurveChart
-          timeSeries={result?.timeSeries ?? []}
-          benchmarkTimeSeries={benchmarkResult?.timeSeries ?? []}
-          benchmarkName={benchmarkResult?.parameters.portfolio.name}
-          status={status}
-          onBrush={handleBrush}
-        />
+            {/* Loading skeletons for slots still running */}
+            {compResults.some((r) => r.status === 'running') && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="space-y-2">
+                  {compResults.filter((r) => r.status === 'running').map((r) => (
+                    <div key={r.id} className="flex items-center gap-3 animate-pulse">
+                      <div className="h-3 bg-gray-200 rounded w-32" />
+                      <div className="h-3 bg-gray-200 rounded w-16" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        <DrawdownChart
-          timeSeries={result?.timeSeries ?? []}
-          status={status}
-          brushWindow={brushWindow}
-        />
+            {/* Overlay equity chart */}
+            <MultiEquityChart series={allSeries} />
 
-        <AnnualReturnsChart
-          result={result}
-          status={status}
-          brushWindow={brushWindow}
-        />
-
-        <RollingReturnsChart
-          timeSeries={result?.timeSeries ?? []}
-          status={status}
-          brushWindow={brushWindow}
-        />
-
-        <ScatterChart
-          metrics={result?.metrics ?? null}
-          benchmarkMetrics={benchmarkResult?.metrics ?? null}
-          benchmarkName={benchmarkResult?.parameters.portfolio.name}
-          status={status}
-        />
-
-        <MonteCarloChart
-          timeSeries={result?.timeSeries ?? []}
-          initialCapital={params.initialCapital}
-          status={status}
-        />
+            {/* Individual charts for primary portfolio */}
+            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+            <AnnualReturnsChart result={result} status={status} brushWindow={brushWindow} />
+            <RollingReturnsChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+          </>
+        ) : (
+          <>
+            {/* Single-portfolio mode: current layout */}
+            <ResultsDashboard metrics={result?.metrics ?? null} status={status} />
+            <EquityCurveChart
+              timeSeries={result?.timeSeries ?? []}
+              status={status}
+              onBrush={handleBrush}
+            />
+            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+            <AnnualReturnsChart result={result} status={status} brushWindow={brushWindow} />
+            <RollingReturnsChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+            <ScatterChart metrics={result?.metrics ?? null} status={status} />
+            <MonteCarloChart
+              timeSeries={result?.timeSeries ?? []}
+              initialCapital={params.initialCapital}
+              status={status}
+            />
+          </>
+        )}
       </div>
     </div>
   );

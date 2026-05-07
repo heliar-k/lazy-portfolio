@@ -4,17 +4,10 @@ import { formatPct, formatCurrency, formatNumber } from '@/lib/format';
 
 interface ResultsDashboardProps {
   metrics: BacktestMetrics | null;
-  benchmarkMetrics?: BacktestMetrics | null;
-  benchmarkName?: string;
   status: 'idle' | 'running' | 'ready' | 'error';
 }
 
-export function ResultsDashboard({
-  metrics,
-  benchmarkMetrics,
-  benchmarkName,
-  status,
-}: ResultsDashboardProps) {
+export function ResultsDashboard({ metrics, status }: ResultsDashboardProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
@@ -84,37 +77,6 @@ export function ResultsDashboard({
           </div>
         ))}
       </div>
-
-      {benchmarkMetrics && benchmarkName && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="text-xs text-gray-500 mb-2">
-            {t('metrics.vs')} {benchmarkName}
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: t('metrics.cagrDelta'), value: metrics ? formatPct(metrics.cagr - benchmarkMetrics.cagr, locale) : '—', positive: metrics ? metrics.cagr >= benchmarkMetrics.cagr : undefined },
-              { label: t('metrics.maxDrawdownDelta'), value: metrics ? formatPct(metrics.maxDrawdown - benchmarkMetrics.maxDrawdown, locale) : '—', positive: metrics ? metrics.maxDrawdown >= benchmarkMetrics.maxDrawdown : undefined },
-              { label: t('metrics.sharpeDelta'), value: metrics ? formatNumber(metrics.sharpeRatio - benchmarkMetrics.sharpeRatio, locale, 2) : '—', positive: metrics ? metrics.sharpeRatio >= benchmarkMetrics.sharpeRatio : undefined },
-              { label: t('metrics.finalCapitalDelta'), value: metrics ? formatCurrency(metrics.finalCapital - benchmarkMetrics.finalCapital, 'USD', locale) : '—', positive: metrics ? metrics.finalCapital >= benchmarkMetrics.finalCapital : undefined },
-            ].map((card) => (
-              <div key={card.label}>
-                <div className="text-xs text-gray-500 mb-1">{card.label}</div>
-                <div
-                  className={`text-sm font-semibold ${
-                    card.positive === undefined
-                      ? 'text-gray-900'
-                      : card.positive
-                        ? 'text-green-600'
-                        : 'text-red-500'
-                  }`}
-                >
-                  {card.value}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

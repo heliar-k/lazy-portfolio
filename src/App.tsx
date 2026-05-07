@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { useUrlSync, useDataInit } from '@/hooks/useUrlSync';
 
@@ -9,9 +9,6 @@ const PortfolioBuilder = lazy(() =>
 );
 const BacktestPage = lazy(() =>
   import('@/components/backtest/BacktestPage').then(m => ({ default: m.BacktestPage })),
-);
-const ComparePage = lazy(() =>
-  import('@/components/compare/ComparePage').then(m => ({ default: m.ComparePage })),
 );
 const TemplatesPage = lazy(() =>
   import('@/components/templates/TemplatesPage').then(m => ({ default: m.TemplatesPage })),
@@ -38,7 +35,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<PortfolioBuilder />} />
           <Route path="/backtest" element={<BacktestPage />} />
-          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/compare" element={<Navigate to="/backtest" replace />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/templates/:id" element={<TemplateDetail />} />
         </Routes>

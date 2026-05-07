@@ -42,7 +42,9 @@
     "dataAsOf": "数据截至 {{date}}",
     "exportCsv": "导出 CSV",
     "resetZoom": "重置缩放",
-    "zoomed": "已缩放"
+    "zoomed": "已缩放",
+    "compareWith": "添加对比组合",
+    "addComparison": "添加组合…"
   },
   "cashflow": {
     "title": "现金流",
@@ -135,7 +137,8 @@
     "runFailed": "回测运行失败",
     "metric": "指标",
     "untitled": "未命名",
-    "portfolioN": "组合 {{n}}"
+    "portfolioN": "组合 {{n}}",
+    "primary": "当前组合"
   },
   "templates": {
     "title": "组合模板",

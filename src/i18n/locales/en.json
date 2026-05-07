@@ -42,7 +42,9 @@
     "dataAsOf": "Data as of {{date}}",
     "exportCsv": "Export CSV",
     "resetZoom": "Reset zoom",
-    "zoomed": "Zoomed"
+    "zoomed": "Zoomed",
+    "compareWith": "Compare with",
+    "addComparison": "Add portfolio…"
   },
   "cashflow": {
     "title": "Cashflows",
@@ -135,7 +137,8 @@
     "runFailed": "Failed to run backtest",
     "metric": "Metric",
     "untitled": "Untitled",
-    "portfolioN": "Portfolio {{n}}"
+    "portfolioN": "Portfolio {{n}}",
+    "primary": "Current"
   },
   "templates": {
     "title": "Portfolio Templates",

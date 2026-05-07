@@ -55,9 +55,6 @@ export function Navbar() {
           <NavLink to="/backtest" className={linkClass}>
             {t('nav.backtest')}
           </NavLink>
-          <NavLink to="/compare" className={linkClass}>
-            {t('nav.compare')}
-          </NavLink>
           <NavLink to="/templates" className={linkClass}>
             {t('nav.templates')}
           </NavLink>
