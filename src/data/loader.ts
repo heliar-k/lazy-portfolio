@@ -88,8 +88,7 @@ export async function loadCpiSeries(region: string): Promise<Map<string, number>
 
   const url = `${BASE}/inflation/${key}.csv`;
   const res = await fetch(url);
-  if (!res.ok) {
-    // Return empty map if CPI data not available for this region
+  if (!res.ok || res.headers.get('content-type')?.includes('text/html')) {
     return new Map();
   }
 
@@ -110,8 +109,7 @@ export async function loadFxSeries(pair: string): Promise<(number | null)[]> {
 
   const url = `${BASE}/proxies/fx/${key}.csv`;
   const res = await fetch(url);
-  if (!res.ok) {
-    // Return empty array if FX data not available
+  if (!res.ok || res.headers.get('content-type')?.includes('text/html')) {
     return [];
   }
 

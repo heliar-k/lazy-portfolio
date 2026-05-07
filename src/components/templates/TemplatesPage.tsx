@@ -13,6 +13,7 @@ export function TemplatesPage() {
   const navigate = useNavigate();
   const loadFromDefinition = usePortfolioStore((s) => s.loadFromDefinition);
   const availableEtfs = useDataStore((s) => s.availableEtfs);
+  const dataStatus = useDataStore((s) => s.status);
   const isZh = i18n.language === 'zh';
 
   const [search, setSearch] = useState('');
@@ -57,7 +58,7 @@ export function TemplatesPage() {
   const handleLoad = (e: React.MouseEvent, templateId: string) => {
     e.stopPropagation();
     const template = templates.find((t) => t.id === templateId);
-    if (template) {
+    if (template && template.holdings.length > 0) {
       loadFromDefinition(template);
       navigate('/');
     }
@@ -66,7 +67,7 @@ export function TemplatesPage() {
   const handleBacktest = (e: React.MouseEvent, templateId: string) => {
     e.stopPropagation();
     const template = templates.find((t) => t.id === templateId);
-    if (template) {
+    if (template && template.holdings.length > 0) {
       loadFromDefinition(template);
       navigate('/backtest');
     }
@@ -160,15 +161,17 @@ export function TemplatesPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={(e) => handleLoad(e, tmpl.id)}
+                      disabled={dataStatus !== 'ready'}
                       className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50
-                        rounded-lg hover:bg-blue-100 transition-colors"
+                        rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {t('common.save')}
                     </button>
                     <button
                       onClick={(e) => handleBacktest(e, tmpl.id)}
+                      disabled={dataStatus !== 'ready'}
                       className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600
-                        rounded-lg hover:bg-blue-700 transition-colors"
+                        rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {t('templates.loadAndBacktest')}
                     </button>

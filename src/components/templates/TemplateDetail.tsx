@@ -31,6 +31,7 @@ export function TemplateDetail() {
   const navigate = useNavigate();
   const loadFromDefinition = usePortfolioStore((s) => s.loadFromDefinition);
   const availableEtfs = useDataStore((s) => s.availableEtfs);
+  const dataStatus = useDataStore((s) => s.status);
   const isZh = i18n.language === 'zh';
 
   const getAsset = (symbol: string): PortfolioHolding['asset'] | null => {
@@ -80,16 +81,19 @@ export function TemplateDetail() {
   }));
 
   const handleLoad = () => {
+    if (template.holdings.length === 0) return;
     loadFromDefinition(template);
     navigate('/');
   };
 
   const handleBacktest = () => {
+    if (template.holdings.length === 0) return;
     loadFromDefinition(template);
     navigate('/backtest');
   };
 
   const handleCompare = () => {
+    if (template.holdings.length === 0) return;
     loadFromDefinition(template);
     navigate('/compare');
   };
@@ -138,13 +142,13 @@ export function TemplateDetail() {
 
       {/* Action buttons */}
       <div className="flex gap-3 mb-8">
-        <button onClick={handleLoad} className="px-5 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+        <button onClick={handleLoad} disabled={dataStatus !== 'ready'} className="px-5 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
           {t('common.save')}
         </button>
-        <button onClick={handleBacktest} className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+        <button onClick={handleBacktest} disabled={dataStatus !== 'ready'} className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
           {t('templates.loadAndBacktest')}
         </button>
-        <button onClick={handleCompare} className="px-5 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+        <button onClick={handleCompare} disabled={dataStatus !== 'ready'} className="px-5 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
           {t('common.compare')}
         </button>
       </div>
@@ -157,38 +161,44 @@ export function TemplateDetail() {
             {t('builder.holdings')} ({holdings.length})
           </h2>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">ETF</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">{t('builder.name')}</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500">{t('builder.weight')}</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500">{t('common.expenseRatio')}</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">{t('common.region')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {holdings.map((h) => (
-                  <tr key={h.asset.symbol} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900">{h.asset.symbol}</td>
-                    <td className="px-4 py-3 text-gray-600">{isZh && h.asset.nameZh ? h.asset.nameZh : h.asset.name}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-700">{formatPct(h.targetWeight)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-500">{formatEr(h.asset.expenseRatio)}</td>
-                    <td className="px-4 py-3 text-gray-500">{REGION_NAMES[h.asset.region] || h.asset.region}</td>
+            {dataStatus === 'loading' ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-400 animate-pulse">
+                Loading holdings...
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">ETF</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">{t('builder.name')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-500">{t('builder.weight')}</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-500">{t('common.expenseRatio')}</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">{t('common.region')}</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50">
-                  <td colSpan={2} className="px-4 py-3 text-sm text-gray-500">
-                    {t('common.weightedExpenseRatio')}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-700 font-medium">100%</td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-700 font-medium">{formatEr(weightedEr)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  {holdings.map((h) => (
+                    <tr key={h.asset.symbol} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-gray-900">{h.asset.symbol}</td>
+                      <td className="px-4 py-3 text-gray-600">{isZh && h.asset.nameZh ? h.asset.nameZh : h.asset.name}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-700">{formatPct(h.targetWeight)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-500">{formatEr(h.asset.expenseRatio)}</td>
+                      <td className="px-4 py-3 text-gray-500">{REGION_NAMES[h.asset.region] || h.asset.region}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50">
+                    <td colSpan={2} className="px-4 py-3 text-sm text-gray-500">
+                      {t('common.weightedExpenseRatio')}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-700 font-medium">100%</td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-700 font-medium">{formatEr(weightedEr)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            )}
           </div>
         </div>
 

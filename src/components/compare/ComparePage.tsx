@@ -140,7 +140,14 @@ export function ComparePage() {
         <div className="flex gap-2">
           {filledSlots.length > 0 && (
             <button
-              onClick={clearAll}
+              onClick={() => {
+                clearAll();
+                setSlotResults(slots.map((_, i) => ({
+                  name: `Portfolio ${i + 1}`,
+                  result: null,
+                  status: 'empty' as const,
+                })));
+              }}
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800
                 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
