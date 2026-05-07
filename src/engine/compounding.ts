@@ -127,13 +127,10 @@ function addMonths(date: Date, months: number): Date {
 }
 
 function toEndOfMonth(date: Date): string {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(0); // last day of previous month
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const y = date.getFullYear();
+  const m = date.getMonth(); // 0-based
+  const lastDay = new Date(y, m + 1, 0).getDate(); // day 0 of next month = last day of this month
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 }
 
 function frequencyToMonths(f: 'monthly' | 'quarterly' | 'annual'): number {

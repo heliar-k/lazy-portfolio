@@ -210,4 +210,36 @@ describe('runBacktest', () => {
     expect(result.metrics.totalContributions).toBe(5000);
     expect(result.metrics.totalWithdrawals).toBe(2000);
   });
+
+  it('CAGR (TWR) is not distorted by large cashflows', () => {
+    // With monthly rebalancing, effectiveWeights are always reset to [0.6, 0.4]
+    // each month before returns are applied — so the monthly return is always
+    // 0.6*0.01 + 0.4*0 = 0.006 regardless of how much cash was deposited.
+    // CAGR must therefore be identical with and without the deposit.
+    const baseReturns = [0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01];
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('STOCK', makeReturnSeries(baseReturns));
+    assetReturns.set('BOND', makeReturnSeries(baseReturns.map(() => 0)));
+
+    const paramsNoCashflow = makeParams({
+      rebalancing: { type: 'calendar', frequency: 'monthly' },
+      inflationAdjusted: false,
+      cashflows: [],
+    });
+    const paramsLargeDeposit = makeParams({
+      rebalancing: { type: 'calendar', frequency: 'monthly' },
+      inflationAdjusted: false,
+      cashflows: [{ date: '2020-06-30', amount: 50000, type: 'deposit' }],
+    });
+
+    const r1 = runBacktest(paramsNoCashflow, assetReturns, new Map(), new Map());
+    const r2 = runBacktest(paramsLargeDeposit, assetReturns, new Map(), new Map());
+
+    // CAGR must be the same: the deposit doesn't change monthly returns
+    expect(r2.metrics.cagr).toBeCloseTo(r1.metrics.cagr, 5);
+
+    // But final capital should be much larger due to the compounding deposit
+    expect(r2.metrics.finalCapital).toBeGreaterThan(r1.metrics.finalCapital + 40000);
+  });
 });
