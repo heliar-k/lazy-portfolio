@@ -1,0 +1,103 @@
+{
+  "nav": {
+    "builder": "Builder",
+    "backtest": "Backtest",
+    "compare": "Compare",
+    "templates": "Templates",
+    "market": "Market",
+    "unsavedChanges": "You have unsaved changes. Leave without saving?"
+  },
+  "builder": {
+    "title": "Portfolio Builder",
+    "addEtf": "Add ETF",
+    "weight": "Weight",
+    "totalWeight": "Total",
+    "normalize": "Normalize",
+    "searchPlaceholder": "Search by symbol or name...",
+    "noEtfs": "Add ETFs from the left panel to set weights"
+  },
+  "backtest": {
+    "title": "Backtest",
+    "run": "Run Backtest",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "initialCapital": "Initial Capital",
+    "rebalancing": "Rebalancing",
+    "displayCurrency": "Display Currency",
+    "benchmark": "Benchmark",
+    "inflationAdjust": "Inflation Adjusted",
+    "noResults": "Run a backtest to see results",
+    "dataAsOf": "Data as of {{date}}"
+  },
+  "rebalance": {
+    "none": "None",
+    "monthly": "Monthly",
+    "quarterly": "Quarterly",
+    "annual": "Annual",
+    "band5": "5% Tolerance Band",
+    "band10": "10% Tolerance Band"
+  },
+  "metrics": {
+    "cagr": "CAGR",
+    "maxDrawdown": "Max Drawdown",
+    "sharpeRatio": "Sharpe Ratio",
+    "sortinoRatio": "Sortino Ratio",
+    "finalCapital": "Final Capital",
+    "totalReturn": "Total Return",
+    "stdDev": "Std Deviation",
+    "bestYear": "Best Year",
+    "worstYear": "Worst Year",
+    "recoveryPeriod": "Recovery Period",
+    "positiveMonths": "Positive Months",
+    "benchmark": "Benchmark",
+    "delta": "Delta"
+  },
+  "compare": {
+    "title": "Portfolio Comparison",
+    "selectPortfolio": "Select portfolio {{index}}",
+    "empty": "Select portfolios to compare"
+  },
+  "templates": {
+    "title": "Portfolio Templates",
+    "loadAndBacktest": "Load & Backtest",
+    "details": "Details",
+    "risk": "Risk",
+    "holdings": "holdings"
+  },
+  "market": {
+    "title": "Market Snapshot",
+    "price": "Price",
+    "dailyChange": "Daily Change",
+    "weekRange": "52-Week Range",
+    "unavailable": "Live prices unavailable"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "leave": "Leave",
+    "retry": "Retry",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "warning": "Warning",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "validation": {
+    "weightsNot100": "Weights must sum to 100%",
+    "noEtfs": "Add at least one ETF",
+    "duplicateEtf": "ETF already added",
+    "tooManyEtfs": "Maximum 20 ETFs per portfolio",
+    "invalidDateRange": "Start date must be before end date",
+    "shortPeriod": "Short backtest periods produce unreliable statistics",
+    "capitalPositive": "Initial capital must be positive",
+    "noDataRange": "No data available for these ETFs in the selected date range",
+    "dataOnlyFrom": "Data only available from {{date}}",
+    "dataQuality": "Some months have incomplete data — metrics may be affected",
+    "weightsNotExact100": "Weights sum to approximately 100% but are not exact",
+    "negativeWeight": "Weight cannot be negative",
+    "weightOver100": "Weight cannot exceed 100%",
+    "invalidStartDate": "Invalid start date",
+    "invalidEndDate": "Invalid end date",
+    "capitalLarge": "Very large initial amounts may cause precision issues"
+  }
+}

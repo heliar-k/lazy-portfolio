@@ -1,0 +1,103 @@
+{
+  "nav": {
+    "builder": "构建组合",
+    "backtest": "回测",
+    "compare": "对比",
+    "templates": "模板",
+    "market": "行情",
+    "unsavedChanges": "您有未保存的更改，确定离开吗？"
+  },
+  "builder": {
+    "title": "组合构建器",
+    "addEtf": "添加 ETF",
+    "weight": "权重",
+    "totalWeight": "合计",
+    "normalize": "归一化",
+    "searchPlaceholder": "按代码或名称搜索...",
+    "noEtfs": "从左侧面板添加 ETF 以设置权重"
+  },
+  "backtest": {
+    "title": "回测",
+    "run": "运行回测",
+    "startDate": "起始日期",
+    "endDate": "终止日期",
+    "initialCapital": "初始本金",
+    "rebalancing": "再平衡",
+    "displayCurrency": "展示币种",
+    "benchmark": "基准",
+    "inflationAdjust": "通胀调整",
+    "noResults": "运行回测以查看结果",
+    "dataAsOf": "数据截至 {{date}}"
+  },
+  "rebalance": {
+    "none": "不调仓",
+    "monthly": "每月",
+    "quarterly": "每季度",
+    "annual": "每年",
+    "band5": "5% 偏离调仓",
+    "band10": "10% 偏离调仓"
+  },
+  "metrics": {
+    "cagr": "年化收益率",
+    "maxDrawdown": "最大回撤",
+    "sharpeRatio": "夏普比率",
+    "sortinoRatio": "索提诺比率",
+    "finalCapital": "最终资本",
+    "totalReturn": "总回报",
+    "stdDev": "标准差",
+    "bestYear": "最佳年份",
+    "worstYear": "最差年份",
+    "recoveryPeriod": "恢复周期",
+    "positiveMonths": "正收益月份",
+    "benchmark": "基准",
+    "delta": "差值"
+  },
+  "compare": {
+    "title": "组合对比",
+    "selectPortfolio": "选择组合 {{index}}",
+    "empty": "选择组合进行对比"
+  },
+  "templates": {
+    "title": "组合模板",
+    "loadAndBacktest": "加载并回测",
+    "details": "详情",
+    "risk": "风险",
+    "holdings": "只"
+  },
+  "market": {
+    "title": "行情快照",
+    "price": "价格",
+    "dailyChange": "日涨跌",
+    "weekRange": "52周范围",
+    "unavailable": "实时行情不可用"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "leave": "离开",
+    "retry": "重试",
+    "loading": "加载中...",
+    "error": "出错了",
+    "warning": "警告",
+    "yes": "是",
+    "no": "否"
+  },
+  "validation": {
+    "weightsNot100": "权重之和必须为 100%",
+    "noEtfs": "请至少添加一只 ETF",
+    "duplicateEtf": "该 ETF 已添加",
+    "tooManyEtfs": "每个组合最多 20 只 ETF",
+    "invalidDateRange": "起始日期必须早于终止日期",
+    "shortPeriod": "回测周期过短，统计结果可能不可靠",
+    "capitalPositive": "初始本金必须大于 0",
+    "noDataRange": "所选日期范围内这些 ETF 无可用数据",
+    "dataOnlyFrom": "数据仅覆盖 {{date}} 之后",
+    "dataQuality": "部分月份数据缺失 — 指标可能受影响",
+    "weightsNotExact100": "权重接近但未精确等于 100%",
+    "negativeWeight": "权重不能为负数",
+    "weightOver100": "权重不能超过 100%",
+    "invalidStartDate": "起始日期无效",
+    "invalidEndDate": "终止日期无效",
+    "capitalLarge": "初始金额过大可能导致精度问题"
+  }
+}
