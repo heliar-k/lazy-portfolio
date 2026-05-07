@@ -55,6 +55,7 @@ describe('runBacktest', () => {
       initialCapital: 10000,
       displayCurrency: 'USD',
       inflationRegion: 'US',
+      inflationAdjusted: true,
       rebalancing: { type: 'calendar', frequency: 'annual' },
       cashflows: [],
       ...overrides,

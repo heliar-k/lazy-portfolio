@@ -118,6 +118,7 @@ export interface BacktestParameters {
   initialCapital: number;
   displayCurrency: DisplayCurrency;
   inflationRegion: Region;
+  inflationAdjusted: boolean;
   rebalancing: RebalancingStrategy;
   cashflows: CashflowEvent[];
 }

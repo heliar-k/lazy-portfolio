@@ -46,6 +46,7 @@ export function useUrlSync() {
   const setInitialCapital = useBacktestStore((s) => s.setInitialCapital);
   const setDisplayCurrency = useBacktestStore((s) => s.setDisplayCurrency);
   const setInflationRegion = useBacktestStore((s) => s.setInflationRegion);
+  const setInflationAdjusted = useBacktestStore((s) => s.setInflationAdjusted);
   const setRebalancing = useBacktestStore((s) => s.setRebalancing);
   const setPortfolio = useBacktestStore((s) => s.setPortfolio);
 
@@ -74,6 +75,7 @@ export function useUrlSync() {
     if (urlParams.initialCapital !== undefined) setInitialCapital(urlParams.initialCapital);
     if (urlParams.displayCurrency) setDisplayCurrency(urlParams.displayCurrency);
     if (urlParams.inflationRegion) setInflationRegion(urlParams.inflationRegion);
+    if (urlParams.inflationAdjusted !== undefined) setInflationAdjusted(urlParams.inflationAdjusted);
     if (urlParams.rebalancing) setRebalancing(urlParams.rebalancing);
 
     // Portfolio from URL

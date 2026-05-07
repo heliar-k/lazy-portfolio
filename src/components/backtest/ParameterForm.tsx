@@ -8,12 +8,14 @@ interface ParameterFormProps {
   rebalancing: RebalancingStrategy;
   displayCurrency: DisplayCurrency;
   inflationRegion: Region;
+  inflationAdjusted: boolean;
   onStartDateChange: (d: string) => void;
   onEndDateChange: (d: string) => void;
   onCapitalChange: (c: number) => void;
   onRebalancingChange: (r: RebalancingStrategy) => void;
   onCurrencyChange: (c: DisplayCurrency) => void;
   onInflationChange: (r: Region) => void;
+  onInflationAdjustedChange: (enabled: boolean) => void;
   onRun: () => void;
   canRun: boolean;
   isRunning: boolean;
@@ -42,12 +44,14 @@ export function ParameterForm({
   rebalancing,
   displayCurrency,
   inflationRegion,
+  inflationAdjusted,
   onStartDateChange,
   onEndDateChange,
   onCapitalChange,
   onRebalancingChange,
   onCurrencyChange,
   onInflationChange,
+  onInflationAdjustedChange,
   onRun,
   canRun,
   isRunning,
@@ -159,6 +163,19 @@ export function ParameterForm({
               <option key={r.value} value={r.value}>{r.label} CPI</option>
             ))}
           </select>
+        </div>
+        <div className="flex items-center gap-2 pt-5">
+          <input
+            type="checkbox"
+            id="inflation-adjusted"
+            checked={inflationAdjusted}
+            onChange={(e) => onInflationAdjustedChange(e.target.checked)}
+            className="h-4 w-4 text-blue-600 rounded border-gray-300
+              focus:ring-blue-500"
+          />
+          <label htmlFor="inflation-adjusted" className="text-xs text-gray-600">
+            {t('backtest.inflationAdjust')}
+          </label>
         </div>
         <button
           onClick={onRun}

@@ -28,6 +28,7 @@ interface BacktestState {
   setInitialCapital: (capital: number) => void;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
   setInflationRegion: (region: Region) => void;
+  setInflationAdjusted: (enabled: boolean) => void;
   setRebalancing: (strategy: RebalancingStrategy) => void;
   setCashflows: (cashflows: CashflowEvent[]) => void;
   setPortfolio: (portfolio: PortfolioDefinition) => void;
@@ -49,6 +50,7 @@ function defaultParams(): BacktestParameters {
     initialCapital: 10000,
     displayCurrency: 'USD',
     inflationRegion: 'US',
+    inflationAdjusted: true,
     rebalancing: { type: 'calendar', frequency: 'annual' },
     cashflows: [],
   };
@@ -75,6 +77,9 @@ export const useBacktestStore = create<BacktestState>()((set) => ({
 
   setInflationRegion: (region) =>
     set((s) => ({ params: { ...s.params, inflationRegion: region } })),
+
+  setInflationAdjusted: (enabled) =>
+    set((s) => ({ params: { ...s.params, inflationAdjusted: enabled } })),
 
   setRebalancing: (strategy) =>
     set((s) => ({ params: { ...s.params, rebalancing: strategy } })),

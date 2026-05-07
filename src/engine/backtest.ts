@@ -93,7 +93,9 @@ export function runBacktest(
   );
 
   // 7. Inflation adjustment (mutates portfolioValueReal / monthlyReturnReal)
-  timeSeries = adjustForInflation(timeSeries, cpiSeries);
+  if (params.inflationAdjusted) {
+    timeSeries = adjustForInflation(timeSeries, cpiSeries);
+  }
 
   // 8. Compute summary metrics
   const firstMonthReal = timeSeries[0]?.portfolioValueReal ?? 0;

@@ -10,8 +10,8 @@ import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
 export function BacktestPage() {
   const { t } = useTranslation();
   const { params, result, status, setStartDate, setEndDate, setInitialCapital,
-    setRebalancing, setDisplayCurrency, setInflationRegion, setPortfolio,
-    setResult, setRunning, setError } = useBacktestStore();
+    setRebalancing, setDisplayCurrency, setInflationRegion, setInflationAdjusted,
+    setPortfolio, setResult, setRunning, setError } = useBacktestStore();
   const { current: portfolio } = usePortfolioStore();
   const { result: hookResult, status: hookStatus, errorMessage: hookError,
     run, reset: _reset } = useBacktest();
@@ -57,12 +57,14 @@ export function BacktestPage() {
         rebalancing={params.rebalancing}
         displayCurrency={params.displayCurrency}
         inflationRegion={params.inflationRegion}
+        inflationAdjusted={params.inflationAdjusted}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onCapitalChange={setInitialCapital}
         onRebalancingChange={setRebalancing}
         onCurrencyChange={setDisplayCurrency}
         onInflationChange={setInflationRegion}
+        onInflationAdjustedChange={setInflationAdjusted}
         onRun={handleRunBacktest}
         canRun={canRun}
         isRunning={status === 'running'}

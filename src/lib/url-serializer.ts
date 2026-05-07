@@ -76,6 +76,9 @@ export function serializeBacktestParams(
   sp.set('capital', String(params.initialCapital));
   sp.set('currency', params.displayCurrency);
   sp.set('inflation', params.inflationRegion);
+  if (!params.inflationAdjusted) {
+    sp.set('nominal', '1');
+  }
   sp.set('rebalance', serializeRebalancing(params.rebalancing));
 
   if (params.cashflows.length > 0) {
@@ -118,6 +121,9 @@ export function deserializeBacktestParams(
 
   const inflation = sp.get('inflation');
   if (inflation) result.inflationRegion = inflation as Region;
+
+  const nominal = sp.get('nominal');
+  result.inflationAdjusted = nominal !== '1';
 
   const rebalance = sp.get('rebalance');
   if (rebalance) result.rebalancing = deserializeRebalancing(rebalance);
