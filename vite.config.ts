@@ -10,4 +10,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split heavy chart library into its own chunk
+          echarts: ['echarts', 'echarts-for-react'],
+          // Split registry data (large static JSON-like output)
+          registry: ['@/portfolios/registry'],
+        },
+      },
+    },
+  },
 });
