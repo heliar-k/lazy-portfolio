@@ -21,7 +21,8 @@
     "noEtfs": "从左侧面板添加 ETF 以设置权重",
     "savedPortfolios": "已保存组合",
     "untitled": "未命名",
-    "remove": "删除"
+    "remove": "删除",
+    "namePlaceholder": "输入组合名称…"
   },
   "backtest": {
     "title": "回测",
@@ -129,6 +130,7 @@
     "selectPlaceholder": "— 请选择 —",
     "savedPortfolios": "已保存组合",
     "benchmarks": "基准",
+    "templates": "模板组合",
     "remove": "删除",
     "runFailed": "回测运行失败",
     "metric": "指标",

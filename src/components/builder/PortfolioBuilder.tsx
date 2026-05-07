@@ -14,6 +14,7 @@ export function PortfolioBuilder() {
     removeHolding,
     setWeight,
     normalizeWeights,
+    setName,
     save,
     load,
     delete: deletePortfolio,
@@ -72,9 +73,11 @@ export function PortfolioBuilder() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <WeightEditor
               holdings={current.holdings}
+              portfolioName={current.name}
               onWeightChange={setWeight}
               onRemove={removeHolding}
               onNormalize={normalizeWeights}
+              onNameChange={setName}
             />
           </div>
         </div>

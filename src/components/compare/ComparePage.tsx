@@ -1,12 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePortfolioStore } from '@/stores/portfolio-store';
 import { useComparisonStore } from '@/stores/comparison-store';
 import { useBacktestStore } from '@/stores/backtest-store';
+import { useDataStore } from '@/stores/data-store';
 import { getBenchmark } from '@/benchmarks/definitions';
 import { runBenchmarkBacktest } from '@/benchmarks/runner';
 import { MultiEquityChart } from '@/components/charts/MultiEquityChart';
-import type { BacktestResult, BacktestParameters } from '@/engine/types';
+import { getTemplateMetadata } from '@/portfolios/registry';
+import type { BacktestResult, BacktestParameters, PortfolioDefinition } from '@/engine/types';
 import { formatPct, formatCurrency, formatNumber } from '@/lib/format';
 
 interface SlotResult {
@@ -21,6 +23,9 @@ export function ComparePage() {
   const { saved } = usePortfolioStore();
   const { slots, setSlot, removeSlot, clearAll } = useComparisonStore();
   const { params } = useBacktestStore();
+  const { etfMap } = useDataStore();
+
+  const templates = useMemo(() => getTemplateMetadata(), []);
 
   const [slotResults, setSlotResults] = useState<SlotResult[]>(
     slots.map((s) => ({ name: s.name, result: s.result, status: s.status })),
@@ -42,7 +47,7 @@ export function ComparePage() {
         return next;
       });
     }
-  }, [saved, setSlot]);
+  }, [saved, setSlot, t]);
 
   const handleSelectBenchmark = useCallback((slotIndex: number, benchmarkId: string) => {
     const benchmark = getBenchmark(benchmarkId);
@@ -61,6 +66,24 @@ export function ComparePage() {
     }
   }, [setSlot]);
 
+  const handleSelectTemplate = useCallback((slotIndex: number, templateId: string) => {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (tpl) {
+      const name = i18n.language === 'zh' && tpl.nameZh ? tpl.nameZh : tpl.name;
+      setSlot(slotIndex, {
+        id: `template-${tpl.id}`,
+        name,
+        status: 'empty',
+        result: null,
+      });
+      setSlotResults((prev) => {
+        const next = [...prev];
+        next[slotIndex] = { name, result: null, status: 'empty' };
+        return next;
+      });
+    }
+  }, [templates, setSlot, i18n.language]);
+
   const handleRunComparison = useCallback(async () => {
     const activeSlots = slots.filter((s) => s.id);
     if (activeSlots.length === 0) return;
@@ -68,7 +91,6 @@ export function ComparePage() {
     setIsRunning(true);
     const newResults = [...slotResults];
 
-    // Set all to loading
     for (let i = 0; i < slots.length; i++) {
       if (slots[i].id) {
         newResults[i] = { ...newResults[i], status: 'loading' };
@@ -76,7 +98,6 @@ export function ComparePage() {
     }
     setSlotResults([...newResults]);
 
-    // Run each slot sequentially (could parallelize, but sequential is simpler for state)
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       if (!slot.id) continue;
@@ -85,7 +106,6 @@ export function ComparePage() {
         let result: BacktestResult;
 
         if (slot.id.startsWith('bench-')) {
-          // Run benchmark
           const benchmark = getBenchmark(slot.id.replace('bench-', ''));
           if (!benchmark) throw new Error('Benchmark not found');
           const benchParams: BacktestParameters = {
@@ -94,18 +114,49 @@ export function ComparePage() {
           };
           result = await runBenchmarkBacktest(benchParams, benchmark);
         } else {
-          // Run portfolio backtest
-          const portfolio = saved.find((p) => p.id === slot.id);
+          let portfolio: PortfolioDefinition | undefined;
+
+          if (slot.id.startsWith('template-')) {
+            const templateId = slot.id.replace('template-', '');
+            const tpl = templates.find((t) => t.id === templateId);
+            if (!tpl) throw new Error('Template not found');
+
+            const etfLookup = new Map(etfMap.map((e) => [e.symbol, e]));
+            portfolio = {
+              id: tpl.id,
+              name: tpl.name,
+              holdings: tpl.holdings
+                .map((h) => {
+                  const e = etfLookup.get(h.symbol);
+                  if (!e) return null;
+                  return {
+                    asset: {
+                      symbol: e.symbol,
+                      name: e.name,
+                      nameZh: e.nameZh,
+                      assetClass: e.assetClass as PortfolioDefinition['holdings'][0]['asset']['assetClass'],
+                      region: e.region as PortfolioDefinition['holdings'][0]['asset']['region'],
+                      currency: e.currency,
+                      provider: e.provider,
+                      expenseRatio: e.expenseRatio,
+                      inceptionDate: e.inceptionDate,
+                    },
+                    targetWeight: h.weight,
+                  };
+                })
+                .filter((h): h is NonNullable<typeof h> => h !== null),
+              tags: [],
+            };
+          } else {
+            portfolio = saved.find((p) => p.id === slot.id);
+          }
+
           if (!portfolio) throw new Error('Portfolio not found');
 
           const { runBacktest } = await import('@/engine/backtest');
           const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } = await import('@/data/proxy-registry');
 
-          const backtestParams: BacktestParameters = {
-            ...params,
-            portfolio,
-          };
-
+          const backtestParams: BacktestParameters = { ...params, portfolio };
           const assetReturns = await resolvePortfolioReturns(backtestParams.portfolio.holdings);
           const cpiSeries = await resolveCpiSeries(backtestParams.inflationRegion);
 
@@ -121,14 +172,14 @@ export function ComparePage() {
         }
 
         newResults[i] = { name: newResults[i].name, result, status: 'ready' };
-      } catch (err) {
+      } catch {
         newResults[i] = { ...newResults[i], status: 'error' };
       }
       setSlotResults([...newResults]);
     }
 
     setIsRunning(false);
-  }, [slots, slotResults, params, saved]);
+  }, [slots, slotResults, params, saved, templates, etfMap]);
 
   const filledSlots = slots.filter((s) => s.id);
   const hasResults = slotResults.some((s) => s.status === 'ready' && s.result);
@@ -179,7 +230,9 @@ export function ComparePage() {
                 const val = e.target.value;
                 if (val.startsWith('benchmark:')) {
                   handleSelectBenchmark(i, val.replace('benchmark:', ''));
-                } else {
+                } else if (val.startsWith('template:')) {
+                  handleSelectTemplate(i, val.replace('template:', ''));
+                } else if (val) {
                   handleSelectPortfolio(i, val);
                 }
               }}
@@ -187,17 +240,31 @@ export function ComparePage() {
                 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">{t('compare.selectPlaceholder')}</option>
-              <optgroup label={t('compare.savedPortfolios')}>
-                {saved.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name || t('compare.untitled')} ({p.holdings.length})
+              {saved.length > 0 && (
+                <optgroup label={t('compare.savedPortfolios')}>
+                  {saved.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || t('compare.untitled')} ({p.holdings.length})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label={t('compare.benchmarks')}>
+                {[
+                  { id: 'sp500', name: 'S&P 500' },
+                  { id: '6040', name: '60/40' },
+                  { id: 'us_bonds', name: 'US Bonds' },
+                  { id: 'gold', name: 'Gold' },
+                ].map((b) => (
+                  <option key={`bench-${b.id}`} value={`benchmark:${b.id}`}>
+                    {b.name}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label={t('compare.benchmarks')}>
-                {[{ id: 'sp500', name: 'S&P 500' }, { id: '6040', name: '60/40' }, { id: 'us_bonds', name: 'US Bonds' }, { id: 'gold', name: 'Gold' }].map((b) => (
-                  <option key={`bench-${b.id}`} value={`benchmark:${b.id}`}>
-                    {b.name}
+              <optgroup label={t('compare.templates')}>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={`template:${tpl.id}`}>
+                    {i18n.language === 'zh' && tpl.nameZh ? tpl.nameZh : tpl.name} ({tpl.holdingCount})
                   </option>
                 ))}
               </optgroup>
@@ -229,7 +296,6 @@ export function ComparePage() {
         ))}
       </div>
 
-      {/* Overlay Chart */}
       <div className="mb-6">
         <MultiEquityChart
           series={slotResults
@@ -241,7 +307,6 @@ export function ComparePage() {
         />
       </div>
 
-      {/* Comparison Table */}
       {hasResults && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm">

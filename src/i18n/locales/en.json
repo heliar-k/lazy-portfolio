@@ -21,7 +21,8 @@
     "noEtfs": "Add ETFs from the left panel to set weights",
     "savedPortfolios": "Saved Portfolios",
     "untitled": "Untitled",
-    "remove": "Remove"
+    "remove": "Remove",
+    "namePlaceholder": "Enter portfolio name…"
   },
   "backtest": {
     "title": "Backtest",
@@ -129,6 +130,7 @@
     "selectPlaceholder": "— Select —",
     "savedPortfolios": "Saved Portfolios",
     "benchmarks": "Benchmarks",
+    "templates": "Template Portfolios",
     "remove": "Remove",
     "runFailed": "Failed to run backtest",
     "metric": "Metric",
