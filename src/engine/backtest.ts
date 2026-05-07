@@ -7,7 +7,6 @@ import type {
 } from './types';
 import { alignReturnsToGrid } from './returns';
 import { convertReturnSeries } from './currency';
-import { computeEffectiveWeights } from './rebalancing';
 import { compoundPortfolio, expandCashflows } from './compounding';
 import { adjustForInflation } from './inflation';
 import { computeMetrics, computeAnnualReturns } from './metrics';
@@ -62,30 +61,24 @@ export function runBacktest(
     alignedReturns.push(aligned);
   }
 
-  // 3. Compute effective weights with rebalancing
-  const effectiveWeights = computeEffectiveWeights(
-    holdings,
-    alignedReturns,
-    rebalancing,
-    monthGrid,
-  );
-
-  // 4. Expand recurring cashflows
+  // 3. Expand recurring cashflows
   const cashflowSchedule = expandCashflows(cashflows);
 
-  // 5. Compound portfolio
-
-  // 5. Compound portfolio
-  const { values, cashflowImpacts } = compoundPortfolio(
-    effectiveWeights,
+  // 4. Compound portfolio with per-asset tracking.
+  //    Rebalancing is applied according to the strategy.
+  //    Cashflows are invested at target weights so new money is split
+  //    proportionally rather than following the drifted allocation.
+  const targetWeights = holdings.map((h) => h.targetWeight);
+  const { values, cashflowImpacts, effectiveWeights } = compoundPortfolio(
+    targetWeights,
     alignedReturns,
     initialCapital,
     cashflowSchedule,
     monthGrid,
-    undefined,
+    rebalancing,
   );
 
-  // 6. Build monthly time series (nominal, with drawdown tracking)
+  // 5. Build monthly time series (nominal, with drawdown tracking)
   let timeSeries = buildTimeSeries(
     monthGrid,
     values,

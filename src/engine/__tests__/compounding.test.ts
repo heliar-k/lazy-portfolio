@@ -74,25 +74,25 @@ describe('expandCashflows', () => {
 
 describe('compoundPortfolio', () => {
   it('compounds a single-asset portfolio with constant returns', () => {
-    // 12 months, 1% monthly return, $10,000 initial
+    // 13 months (month 0 + 12 months at 1%), $10,000 initial
     const months = Array.from({ length: 13 }, (_, i) => {
       const d = new Date(2020, i, 1);
       const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
       return lastDay.toISOString().slice(0, 10);
     });
 
-    const weights: number[][] = months.map(() => [1.0]);
     const returns: (number | null)[][] = [
       months.map((_, i) => (i === 0 ? null : 0.01)),
     ];
     const cashflows = new Map<string, number>();
 
     const { values } = compoundPortfolio(
-      weights,
+      [1.0],
       returns,
       10000,
       cashflows,
       months,
+      { type: 'calendar', frequency: 'annual' },
     );
 
     expect(values).toHaveLength(13);
@@ -109,16 +109,22 @@ describe('compoundPortfolio', () => {
       return lastDay.toISOString().slice(0, 10);
     });
 
-    const weights: number[][] = months.map(() => [1.0]);
     const returns: (number | null)[][] = [
       [null, 0.01, 0.01, 0.01],
     ];
     const cashflows = new Map<string, number>();
     cashflows.set(months[2], 1000); // add $1000 at end of month 2
 
-    const { values } = compoundPortfolio(weights, returns, 10000, cashflows, months);
+    const { values } = compoundPortfolio(
+      [1.0],
+      returns,
+      10000,
+      cashflows,
+      months,
+      { type: 'calendar', frequency: 'annual' },
+    );
 
-    // Month 0: 10000
+    // Month 0: 10000 (null return → 0)
     // Month 1: 10000 * 1.01 = 10100
     // Month 2: 10100 * 1.01 + 1000 = 11201
     // Month 3: 11201 * 1.01 = 11313.01
@@ -128,33 +134,34 @@ describe('compoundPortfolio', () => {
     expect(values[3]).toBeCloseTo(11313.01, 0);
   });
 
-  it('handles two-asset portfolio', () => {
+  it('handles two-asset portfolio with monthly rebalancing', () => {
     const months = Array.from({ length: 4 }, (_, i) => {
       const d = new Date(2020, i, 1);
       const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
       return lastDay.toISOString().slice(0, 10);
     });
 
-    // 60/40, rebalanced monthly
-    const weights: number[][] = [
-      [0.6, 0.4],
-      [0.6, 0.4],
-      [0.6, 0.4],
-      [0.6, 0.4],
-    ];
+    // 60/40, monthly rebalancing
     const returns: (number | null)[][] = [
       [null, 0.02, -0.01, 0.03],
       [null, 0.005, 0.005, 0.005],
     ];
     const cashflows = new Map<string, number>();
 
-    const { values } = compoundPortfolio(weights, returns, 10000, cashflows, months);
+    const { values } = compoundPortfolio(
+      [0.6, 0.4],
+      returns,
+      10000,
+      cashflows,
+      months,
+      { type: 'calendar', frequency: 'monthly' },
+    );
 
     // Month 1 return = 0.6*0.02 + 0.4*0.005 = 0.012 + 0.002 = 0.014
     // value[1] = 10000 * 1.014 = 10140
     expect(values[1]).toBeCloseTo(10140, 0);
 
-    // Month 2 return = 0.6*(-0.01) + 0.4*0.005 = -0.006 + 0.002 = -0.004
+    // Month 2: rebalance to [6084, 4056], return = 0.6*(-0.01) + 0.4*0.005 = -0.004
     // value[2] = 10140 * 0.996 = 10099.44
     expect(values[2]).toBeCloseTo(10099.44, 0);
   });

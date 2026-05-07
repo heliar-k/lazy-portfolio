@@ -1,72 +1,77 @@
-import type { CashflowEvent } from './types';
+import type { CashflowEvent, RebalancingStrategy } from './types';
+import { checkRebalanceTrigger } from './rebalancing';
 
 /**
- * Compound a portfolio forward in time given effective weights,
- * monthly asset returns, initial capital, and cashflows.
+ * Compound a portfolio forward in time, tracking per-asset capital.
+ *
+ * Rebalancing is applied according to the strategy. Cashflows are invested
+ * at target weights so deposits/withdrawals don't distort the allocation.
  */
 export function compoundPortfolio(
-  effectiveWeights: number[][], // [monthIdx][assetIdx]
+  targetWeights: number[],         // [assetIdx] target allocation
   monthlyReturns: (number | null)[][], // [assetIdx][monthIdx]
   initialCapital: number,
-  cashflowSchedule: Map<string, number>, // date → net cashflow (deposits positive)
+  cashflowSchedule: Map<string, number>, // date → net cashflow
   months: string[],
-  expenseRatios?: number[], // [assetIdx] annual expense ratios
+  strategy: RebalancingStrategy,
 ): {
   values: number[];
   cashflowImpacts: number[];
+  effectiveWeights: number[][];
 } {
+  const nAssets = targetWeights.length;
   const nMonths = months.length;
 
-  if (nMonths === 0) {
-    return { values: [], cashflowImpacts: [] };
+  if (nMonths === 0 || nAssets === 0) {
+    return { values: [], cashflowImpacts: [], effectiveWeights: [] };
   }
+
+  // Per-asset capital — starts at target weights
+  const assetCapital = targetWeights.map((w) => w * initialCapital);
 
   const values: number[] = [];
   const cashflowImpacts: number[] = [];
-  const totalFees: number[] = [];
-
-  let capital = initialCapital;
+  const effectiveWeights: number[][] = [];
 
   for (let m = 0; m < nMonths; m++) {
-    // Deduct expense ratio fees (annual fee / 12)
-    let monthlyFee = 0;
-    if (expenseRatios && expenseRatios.length > 0) {
-      for (let a = 0; a < effectiveWeights[m].length; a++) {
-        const weight = effectiveWeights[m][a];
-        const er = expenseRatios[a] ?? 0;
-        monthlyFee += weight * (er / 12) * capital;
+    const totalBefore = assetCapital.reduce((s, v) => s + v, 0);
+
+    // Rebalance if the strategy triggers (skip month 0 — already at target)
+    if (m > 0 && checkRebalanceTrigger(strategy, m, months, assetCapital, targetWeights)) {
+      for (let a = 0; a < nAssets; a++) {
+        assetCapital[a] = totalBefore * targetWeights[a];
       }
-      capital -= monthlyFee;
-      if (capital < 0) capital = 0;
     }
 
-    // Compute weighted portfolio return for this month
-    let portfolioReturn = 0;
-    let totalWeight = 0;
-    for (let a = 0; a < effectiveWeights[m].length; a++) {
-      const weight = effectiveWeights[m][a];
-      const assetRet = monthlyReturns[a]?.[m] ?? 0;
-      portfolioReturn += weight * assetRet;
-      totalWeight += weight;
-    }
-    // Normalize in case weights don't sum to 1 (floating point)
-    if (totalWeight > 0) {
-      portfolioReturn /= totalWeight;
+    // Record start-of-month weights for TWR calculation
+    const total = assetCapital.reduce((s, v) => s + v, 0);
+    effectiveWeights.push(
+      total > 0 ? assetCapital.map((v) => v / total) : [...targetWeights],
+    );
+
+    // Apply monthly returns to each asset
+    for (let a = 0; a < nAssets; a++) {
+      const ret = monthlyReturns[a]?.[m] ?? 0;
+      assetCapital[a] *= 1 + ret;
     }
 
-    // Apply return
-    capital = capital * (1 + portfolioReturn);
-
-    // Apply cashflow at end of month
+    // Apply cashflow at target weights so deposits/withdrawals are split
+    // proportionally rather than going into whichever assets have drifted highest.
     const cf = cashflowSchedule.get(months[m]) ?? 0;
-    capital += cf;
+    if (cf !== 0) {
+      const totalAfterReturns = assetCapital.reduce((s, v) => s + v, 0);
+      // Cap withdrawal to available capital so values don't go negative
+      const actualCf = cf < 0 ? Math.max(cf, -totalAfterReturns) : cf;
+      for (let a = 0; a < nAssets; a++) {
+        assetCapital[a] += actualCf * targetWeights[a];
+      }
+    }
 
-    values.push(capital);
+    values.push(assetCapital.reduce((s, v) => s + v, 0));
     cashflowImpacts.push(cf);
-    totalFees.push(monthlyFee);
   }
 
-  return { values, cashflowImpacts };
+  return { values, cashflowImpacts, effectiveWeights };
 }
 
 /**

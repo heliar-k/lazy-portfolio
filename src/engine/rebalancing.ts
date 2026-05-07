@@ -75,7 +75,7 @@ export function computeEffectiveWeights(
   return weights;
 }
 
-function checkRebalanceTrigger(
+export function checkRebalanceTrigger(
   strategy: RebalancingStrategy,
   monthIdx: number,
   months: string[],
