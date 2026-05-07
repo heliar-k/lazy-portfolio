@@ -12,6 +12,7 @@ import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
 import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
+import { ScatterChart } from '@/components/charts/ScatterChart';
 
 type BrushWindow = { start: string; end: string } | null;
 
@@ -177,6 +178,13 @@ export function BacktestPage() {
           timeSeries={result?.timeSeries ?? []}
           status={status}
           brushWindow={brushWindow}
+        />
+
+        <ScatterChart
+          metrics={result?.metrics ?? null}
+          benchmarkMetrics={benchmarkResult?.metrics ?? null}
+          benchmarkName={benchmarkResult?.parameters.portfolio.name}
+          status={status}
         />
       </div>
     </div>
