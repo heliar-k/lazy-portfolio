@@ -23,58 +23,28 @@ interface BlendConfig {
   symbol: string;       // ETF ticker
   proxyFile: string;    // path relative to DATA_DIR, e.g. "equity/sp500_tr.csv"
   outputFile: string;   // path relative to DATA_DIR, e.g. "equity/spy_blended.csv"
-  proxySymbol: string;  // proxy symbol to update in etf_map.json
+  proxySymbol: string;  // output proxy symbol (also used as CSV name stem)
+  expenseRatio: number; // annual ER as decimal, e.g. 0.0003 = 0.03%
 }
 
 const BLEND_CONFIGS: BlendConfig[] = [
-  {
-    symbol: 'SPY',
-    proxyFile: 'equity/sp500_tr.csv',
-    outputFile: 'equity/spy_blended.csv',
-    proxySymbol: 'SP500_TR',
-  },
-  {
-    symbol: 'TLT',
-    proxyFile: 'bond/us_long_tr.csv',
-    outputFile: 'bond/tlt_blended.csv',
-    proxySymbol: 'US_LONG_TR',
-  },
-  {
-    symbol: 'BND',
-    proxyFile: 'bond/us_agg_bond_tr.csv',
-    outputFile: 'bond/bnd_blended.csv',
-    proxySymbol: 'US_AGG_BOND_TR',
-  },
-  {
-    symbol: 'SHY',
-    proxyFile: 'bond/cash.csv',
-    outputFile: 'bond/shy_blended.csv',
-    proxySymbol: 'CASH',
-  },
-  {
-    symbol: 'VTI',
-    proxyFile: 'equity/sp500_tr.csv',
-    outputFile: 'equity/vti_blended.csv',
-    proxySymbol: 'SP500_TR',
-  },
-  {
-    symbol: 'BIL',
-    proxyFile: 'bond/cash.csv',
-    outputFile: 'bond/bil_blended.csv',
-    proxySymbol: 'CASH',
-  },
-  {
-    symbol: 'GLD',
-    proxyFile: 'commodity/gold_spot.csv',
-    outputFile: 'commodity/gld_blended.csv',
-    proxySymbol: 'GOLD_SPOT',
-  },
-  {
-    symbol: 'AGG',
-    proxyFile: 'bond/us_agg_bond_tr.csv',
-    outputFile: 'bond/agg_blended.csv',
-    proxySymbol: 'US_AGG_BOND_TR',
-  },
+  { symbol: 'SPY',  proxyFile: 'equity/sp500_tr.csv',      outputFile: 'equity/spy_blended.csv',       proxySymbol: 'SP500_TR',      expenseRatio: 0.0009 },
+  { symbol: 'VOO',  proxyFile: 'equity/sp500_tr.csv',      outputFile: 'equity/voo_blended.csv',       proxySymbol: 'SP500_TR',      expenseRatio: 0.0003 },
+  { symbol: 'VTI',  proxyFile: 'equity/sp500_tr.csv',      outputFile: 'equity/vti_blended.csv',       proxySymbol: 'SP500_TR',      expenseRatio: 0.0003 },
+  { symbol: 'QQQ',  proxyFile: 'equity/sp500_tr.csv',      outputFile: 'equity/qqq_blended.csv',       proxySymbol: 'SP500_TR',      expenseRatio: 0.0020 },
+  { symbol: 'VEA',  proxyFile: 'equity/msci_eafe_tr.csv',  outputFile: 'equity/vea_blended.csv',       proxySymbol: 'MSCI_EAFE_TR',  expenseRatio: 0.0005 },
+  { symbol: 'VWO',  proxyFile: 'equity/msci_em_tr.csv',    outputFile: 'equity/vwo_blended.csv',       proxySymbol: 'MSCI_EM_TR',    expenseRatio: 0.0008 },
+  { symbol: 'TLT',  proxyFile: 'bond/us_long_tr.csv',      outputFile: 'bond/tlt_blended.csv',         proxySymbol: 'US_LONG_TR',    expenseRatio: 0.0015 },
+  { symbol: 'SPTL', proxyFile: 'bond/us_long_tr.csv',      outputFile: 'bond/sptl_blended.csv',        proxySymbol: 'US_LONG_TR',    expenseRatio: 0.0006 },
+  { symbol: 'IEF',  proxyFile: 'bond/us_10y_tr.csv',       outputFile: 'bond/ief_blended.csv',         proxySymbol: 'US_10Y_TR',     expenseRatio: 0.0015 },
+  { symbol: 'BND',  proxyFile: 'bond/us_agg_bond_tr.csv',  outputFile: 'bond/bnd_blended.csv',         proxySymbol: 'US_AGG_BOND_TR',expenseRatio: 0.0003 },
+  { symbol: 'AGG',  proxyFile: 'bond/us_agg_bond_tr.csv',  outputFile: 'bond/agg_blended.csv',         proxySymbol: 'US_AGG_BOND_TR',expenseRatio: 0.0003 },
+  { symbol: 'SHY',  proxyFile: 'bond/cash.csv',            outputFile: 'bond/shy_blended.csv',         proxySymbol: 'CASH',          expenseRatio: 0.0015 },
+  { symbol: 'BIL',  proxyFile: 'bond/cash.csv',            outputFile: 'bond/bil_blended.csv',         proxySymbol: 'CASH',          expenseRatio: 0.0014 },
+  { symbol: 'SGOV', proxyFile: 'bond/cash.csv',            outputFile: 'bond/sgov_blended.csv',        proxySymbol: 'CASH',          expenseRatio: 0.0007 },
+  { symbol: 'GLD',  proxyFile: 'commodity/gold_spot.csv',  outputFile: 'commodity/gld_blended.csv',    proxySymbol: 'GOLD_SPOT',     expenseRatio: 0.0040 },
+  { symbol: 'GLDM', proxyFile: 'commodity/gold_spot.csv',  outputFile: 'commodity/gldm_blended.csv',   proxySymbol: 'GOLD_SPOT',     expenseRatio: 0.0010 },
+  { symbol: 'IAU',  proxyFile: 'commodity/gold_spot.csv',  outputFile: 'commodity/iau_blended.csv',    proxySymbol: 'GOLD_SPOT',     expenseRatio: 0.0025 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -156,6 +126,7 @@ async function fetchYahooHistory(symbol: string): Promise<PricePoint[]> {
 function blendSeries(
   proxyData: PricePoint[],
   etfData: PricePoint[],
+  expenseRatio: number,
 ): PricePoint[] {
   // Build lookup from proxy data by YYYY-MM
   const proxyByMonth = new Map<string, number>();
@@ -184,16 +155,16 @@ function blendSeries(
   }
 
   const result: PricePoint[] = [];
+  let inceptionIdx = -1;
 
   for (const proxy of proxyData) {
     const ym = proxy.date.substring(0, 7);
     const etfPrice = etfByMonth.get(ym);
 
     if (etfPrice !== undefined && etfPrice > 0) {
-      // Post-inception: use actual ETF adjclose
+      if (inceptionIdx === -1) inceptionIdx = result.length;
       result.push({ date: proxy.date, price: etfPrice });
     } else if (proxy.price > 0) {
-      // Pre-inception: use scaled proxy
       result.push({ date: proxy.date, price: Math.round(proxy.price * ratio * 10000) / 10000 });
     }
   }
@@ -205,6 +176,19 @@ function blendSeries(
     if (etf.date > lastProxyDate && !existingDates.has(etf.date)) {
       result.push(etf);
       existingDates.add(etf.date);
+    }
+  }
+
+  // Apply ER drag to pre-inception proxy prices.
+  // Each pre-inception point is (inceptionIdx - i) months before inception.
+  // Multiplying by (1 + ER/12)^(inceptionIdx - i) compresses the growth
+  // so that computed monthly returns = index_return - ER/12.
+  if (expenseRatio > 0 && inceptionIdx > 0) {
+    const monthlyER = expenseRatio / 12;
+    for (let i = 0; i < inceptionIdx; i++) {
+      const monthsBefore = inceptionIdx - i;
+      const factor = Math.pow(1 + monthlyER, monthsBefore);
+      result[i] = { ...result[i], price: Math.round(result[i].price * factor * 10000) / 10000 };
     }
   }
 
@@ -257,7 +241,7 @@ async function main() {
 
     // Blend
     try {
-      const blended = blendSeries(proxyData, etfData);
+      const blended = blendSeries(proxyData, etfData, config.expenseRatio);
       const outputPath = path.join(DATA_DIR, config.outputFile);
       writeCSV(outputPath, blended);
       console.log(`  Blended: ${blended.length} points (${blended[0].date} to ${blended[blended.length - 1].date})`);
@@ -285,14 +269,23 @@ async function main() {
   const etfMap = JSON.parse(fs.readFileSync(etfMapPath, 'utf-8')) as any[];
 
   const updates: Record<string, string> = {
-    'SPY': 'SPY_BLENDED',
-    'TLT': 'TLT_BLENDED',
-    'BND': 'BND_BLENDED',
-    'SHY': 'SHY_BLENDED',
-    'VTI': 'VTI_BLENDED',
-    'BIL': 'BIL_BLENDED',
-    'GLD': 'GLD_BLENDED',
-    'AGG': 'AGG_BLENDED',
+    'SPY':  'SPY_BLENDED',
+    'VOO':  'VOO_BLENDED',
+    'VTI':  'VTI_BLENDED',
+    'QQQ':  'QQQ_BLENDED',
+    'VEA':  'VEA_BLENDED',
+    'VWO':  'VWO_BLENDED',
+    'TLT':  'TLT_BLENDED',
+    'SPTL': 'SPTL_BLENDED',
+    'IEF':  'IEF_BLENDED',
+    'BND':  'BND_BLENDED',
+    'AGG':  'AGG_BLENDED',
+    'SHY':  'SHY_BLENDED',
+    'BIL':  'BIL_BLENDED',
+    'SGOV': 'SGOV_BLENDED',
+    'GLD':  'GLD_BLENDED',
+    'GLDM': 'GLDM_BLENDED',
+    'IAU':  'IAU_BLENDED',
   };
 
   let updated = 0;
