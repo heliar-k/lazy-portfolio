@@ -41,6 +41,12 @@ export async function resolvePortfolioReturns(
       continue;
     }
 
+    // Skip ETFs with no proxy data available (e.g., BTC placeholder)
+    if (!entry.proxySymbol) {
+      console.warn(`ETF "${symbol}" has no proxy data available, skipping`);
+      continue;
+    }
+
     // Load proxy price series
     const pricePoints = await loadProxySeries(entry.proxySymbol);
 

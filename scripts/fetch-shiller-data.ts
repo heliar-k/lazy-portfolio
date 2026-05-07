@@ -1,55 +1,118 @@
 /**
- * Fetch latest Shiller data and update bundled proxy CSVs.
+ * Data auto-update script.
  *
- * Usage: npx tsx scripts/fetch-shiller-data.ts
+ * Downloads the latest Shiller CAPE spreadsheet, fetches latest FRED data,
+ * and regenerates all proxy CSV files.
  *
- * Downloads the Shiller CAPE spreadsheet (contains S&P 500 price, dividends,
- * earnings, CPI, and 10Y Treasury yields from 1871–present), then regenerates
- * the proxy CSV files.
+ * Usage: npm run update-data
+ *
+ * What it does:
+ * 1. Downloads Shiller ie_data.xls (if >30 days old or missing)
+ * 2. Runs generate-real-proxies.ts (Shiller + FRED + GLD)
+ * 3. Runs generate-intl-proxies.ts (Ken French international data)
+ * 4. Updates data_version.json timestamp
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, '..', 'public', 'data');
+const SHILLER_URL = 'http://www.econ.yale.edu/~shiller/data/ie_data.xls';
+const SHILLER_PATH = '/tmp/ie_data.xls';
+const DATA_DIR = path.resolve('public/data');
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-// NOTE: Full FRED API integration requires a FRED API key.
-// For now, this script validates existing data is in good shape.
-// Real-time data updates are handled by Yahoo Finance gap-filling at runtime.
+// ---------------------------------------------------------------------------
+// Step 1: Download Shiller data if needed
+// ---------------------------------------------------------------------------
 
-interface ShillerRow {
-  date: string;       // "1871.01"
-  price: number;      // S&P Composite (nominal)
-  dividend: number;
-  earnings: number;
-  cpi: number;
-  longRate: number;   // 10Y Treasury
+function shillerNeedsUpdate(): boolean {
+  if (!fs.existsSync(SHILLER_PATH)) {
+    console.log('Shiller XLS not found — downloading...');
+    return true;
+  }
+
+  const stat = fs.statSync(SHILLER_PATH);
+  const age = Date.now() - stat.mtimeMs;
+  const days = Math.round(age / (24 * 60 * 60 * 1000));
+
+  if (age > MAX_AGE_MS) {
+    console.log(`Shiller XLS is ${days} days old (>30) — re-downloading...`);
+    return true;
+  }
+
+  console.log(`Shiller XLS is ${days} days old — up to date`);
+  return false;
 }
 
-async function main() {
-  console.log('Checking data integrity...\n');
+async function downloadShiller(): Promise<void> {
+  console.log(`Downloading ${SHILLER_URL}...`);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const res = await fetch(SHILLER_URL, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(SHILLER_PATH, buf);
+    console.log(`Downloaded ${(buf.length / 1024).toFixed(0)} KB → ${SHILLER_PATH}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Run proxy generation scripts
+// ---------------------------------------------------------------------------
+
+function runScript(scriptPath: string, description: string): boolean {
+  console.log(`\n--- ${description} ---`);
+  try {
+    execSync(`npx tsx ${scriptPath}`, {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      timeout: 5 * 60 * 1000, // 5 minutes
+    });
+    return true;
+  } catch (err) {
+    console.error(`Failed: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Data integrity check
+// ---------------------------------------------------------------------------
+
+function validateData(): { files: number; ok: number; issues: string[] } {
+  console.log('\n--- Data Integrity Check ---');
 
   const proxiesDir = path.join(DATA_DIR, 'proxies');
   const dirs = fs.readdirSync(proxiesDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 
-  let totalFiles = 0;
-  let totalPoints = 0;
+  let files = 0;
+  let ok = 0;
+  const issues: string[] = [];
 
   for (const dir of dirs) {
     const dirPath = path.join(proxiesDir, dir);
-    const files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.csv'));
+    const csvFiles = fs.readdirSync(dirPath).filter((f) => f.endsWith('.csv'));
 
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
+    for (const file of csvFiles) {
+      files++;
+      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
       const lines = content.trim().split('\n');
-      const dataLines = lines.length - 1; // minus header
 
-      // Validate: check for NaN or empty values
+      if (lines.length < 2) {
+        issues.push(`${dir}/${file}: empty or header-only`);
+        continue;
+      }
+
       let nanCount = 0;
       for (let i = 1; i < lines.length; i++) {
         const parts = lines[i].split(',');
@@ -58,33 +121,87 @@ async function main() {
         }
       }
 
-      const status = nanCount > 0 ? `⚠ ${nanCount} NaN values` : 'OK';
-      console.log(`  ${dir}/${file}: ${dataLines} data points [${status}]`);
-      totalFiles++;
-      totalPoints += dataLines;
+      if (nanCount > 0) {
+        issues.push(`${dir}/${file}: ${nanCount} NaN values`);
+      } else {
+        ok++;
+      }
     }
   }
 
-  // Check CPI data
-  const inflationDir = path.join(DATA_DIR, 'inflation');
-  if (fs.existsSync(inflationDir)) {
-    const cpiFiles = fs.readdirSync(inflationDir).filter((f) => f.endsWith('.csv'));
-    for (const file of cpiFiles) {
-      const content = fs.readFileSync(path.join(inflationDir, file), 'utf-8');
-      const lines = content.trim().split('\n');
-      console.log(`  inflation/${file}: ${lines.length - 1} data points`);
-    }
-  }
-
-  // Update data_version.json timestamp
-  const versionPath = path.join(DATA_DIR, 'data_version.json');
-  const version = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
-  version.lastUpdated = new Date().toISOString().split('T')[0];
-  fs.writeFileSync(versionPath, JSON.stringify(version, null, 2) + '\n');
-  console.log(`\nData version updated: ${version.lastUpdated}`);
-
-  console.log(`\nTotal: ${totalFiles} proxy files, ${totalPoints} data points`);
-  console.log('Validation complete.');
+  return { files, ok, issues };
 }
 
-main().catch(console.error);
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  console.log('╔════════════════════════════════════╗');
+  console.log('║   Data Auto-Update               ║');
+  console.log('╚════════════════════════════════════╝\n');
+
+  const startTime = Date.now();
+
+  // 1. Download Shiller data if needed
+  console.log('[1/4] Shiller data:');
+  if (shillerNeedsUpdate()) {
+    try {
+      await downloadShiller();
+    } catch (err) {
+      console.error(`Download failed: ${(err as Error).message}`);
+      console.log('Using existing Shiller data if available...');
+      if (!fs.existsSync(SHILLER_PATH)) {
+        console.error('No Shiller data available. Aborting.');
+        process.exit(1);
+      }
+    }
+  }
+
+  // 2. Generate proxy CSVs from Shiller + FRED
+  console.log('\n[2/5] Generating proxy data from Shiller + FRED...');
+  if (!runScript('scripts/generate-real-proxies.ts', 'Shiller + FRED proxies')) {
+    console.error('Proxy generation failed. Aborting.');
+    process.exit(1);
+  }
+
+  // 2b. Blend ETF data on top (top ETFs get real Yahoo Finance prices post-inception)
+  console.log('\n[3/5] Blending ETF data...');
+  runScript('scripts/blend-etf-data.ts', 'ETF data blending');
+
+  // 3. Generate international proxies from Ken French
+  console.log('\n[4/5] International equity proxies:');
+  // Ken French data doesn't change monthly — skip if files already exist and are recent
+  const eafePath = path.join(DATA_DIR, 'proxies/equity/msci_eafe_tr.csv');
+  if (fs.existsSync(eafePath)) {
+    const stat = fs.statSync(eafePath);
+    const ageDays = Math.round((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000));
+    if (ageDays < 90) {
+      console.log(`International proxies are ${ageDays} days old — skipping (Ken French updates quarterly)`);
+    } else {
+      runScript('scripts/generate-intl-proxies.ts --local /tmp', 'Ken French international');
+    }
+  } else {
+    runScript('scripts/generate-intl-proxies.ts --local /tmp', 'Ken French international');
+  }
+
+  // 4. Validate
+  console.log('\n[5/5] Validating...');
+  const { files, ok, issues } = validateData();
+  console.log(`Files: ${files} total, ${ok} OK, ${issues.length} with issues`);
+  if (issues.length > 0) {
+    console.log('Issues:');
+    issues.forEach((i) => console.log(`  ⚠  ${i}`));
+  }
+
+  // Done
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const status = issues.length === 0 ? '✅' : '⚠️';
+  console.log(`\n${status} Data update complete (${elapsed}s)`);
+  console.log('Run "npx tsx scripts/validate-backtest.ts" to verify engine integrity.');
+}
+
+main().catch((err) => {
+  console.error('Fatal:', err);
+  process.exit(1);
+});

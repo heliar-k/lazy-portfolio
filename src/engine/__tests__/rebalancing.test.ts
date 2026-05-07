@@ -81,28 +81,30 @@ describe('computeEffectiveWeights — calendar rebalancing', () => {
     expect(weights[5][0]).toBeCloseTo(0.5);
   });
 
-  it('rebalances annually (December)', () => {
+  it('rebalances annually (January)', () => {
     const holdings = [makeHolding('A', 0.6), makeHolding('B', 0.4)];
-    const months = makeMonths(13);
+    const months = makeMonths(14); // Jan year0 through Feb year1
 
     const returns: (number | null)[][] = [
       months.map(() => null),
       months.map(() => null),
     ];
-    for (let m = 1; m < 13; m++) {
+    for (let m = 1; m < 14; m++) {
       returns[0][m] = 0.05;
       returns[1][m] = 0.00;
     }
 
     const weights = computeEffectiveWeights(holdings, returns, { type: 'calendar', frequency: 'annual' }, months);
 
-    // Month 0 (Jan): target
+    // Month 0 (Jan year0): target
     expect(weights[0]).toEqual([0.6, 0.4]);
-    // Month 11 (Dec): rebalanced
-    expect(weights[11][0]).toBeCloseTo(0.6);
-    expect(weights[11][1]).toBeCloseTo(0.4);
-    // Month 12 (Jan 2021): drifted (no rebalance in Jan)
-    expect(weights[12][0]).toBeGreaterThan(0.6);
+    // Month 11 (Dec): drifted (no rebalance yet)
+    expect(weights[11][0]).toBeGreaterThan(0.6);
+    // Month 12 (Jan year1): rebalanced per January 1st convention
+    expect(weights[12][0]).toBeCloseTo(0.6);
+    expect(weights[12][1]).toBeCloseTo(0.4);
+    // Month 13 (Feb year1): drifted again
+    expect(weights[13][0]).toBeGreaterThan(0.6);
   });
 });
 

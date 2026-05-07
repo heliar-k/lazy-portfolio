@@ -1,0 +1,667 @@
+/**
+ * Generate real historical proxy data from Shiller's ie_data.xls.
+ *
+ * Downloads and parses Robert Shiller's long-term stock/bond/CPI data,
+ * then generates proper proxy CSV files for the backtest engine.
+ *
+ * Also fetches gold spot prices and T-Bill rates from FRED/Yahoo Finance.
+ *
+ * Usage: npx tsx scripts/generate-real-proxies.ts
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { ProxyAgent, setGlobalDispatcher, fetch as undiciFetch } from 'undici';
+import XLSX from 'xlsx';
+import { fetchFredSeries } from './lib/fred-api.js';
+
+const PROXY_URL = process.env.PROXY_URL || 'http://127.0.0.1:7890';
+
+let proxyAvailable = false;
+
+async function checkProxy(): Promise<boolean> {
+  try {
+    setGlobalDispatcher(new ProxyAgent(PROXY_URL));
+    // Lightweight probe — try a simple request through the proxy
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    await undiciFetch('https://www.google.com', {
+      method: 'HEAD',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    proxyAvailable = true;
+    console.log(`   Proxy ${PROXY_URL} is available — Yahoo Finance data enabled`);
+    return true;
+  } catch {
+    proxyAvailable = false;
+    console.log(`   Proxy ${PROXY_URL} is unavailable — Yahoo Finance data disabled`);
+    console.log('   (Gold data will use built-in historical estimates only)');
+    return false;
+  }
+}
+
+const DATA_DIR = path.resolve('public/data');
+const SHILLER_XLS = '/tmp/ie_data.xls';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ShillerRow {
+  date: string;           // "YYYY-MM-DD" end-of-month
+  year: number;
+  month: number;
+  price: number;           // S&P Composite nominal price
+  dividend: number;        // monthly dividend
+  cpi: number;            // Consumer Price Index
+  rateGS10: number;       // 10Y Treasury yield (%)
+  monthlyBondTR: number;   // Monthly bond total return factor (1 + r), col 17
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Parse Shiller XLS
+// ---------------------------------------------------------------------------
+
+function parseShillerData(): ShillerRow[] {
+  const wb = XLSX.readFile(SHILLER_XLS);
+  const sheet = wb.Sheets['Data'];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+
+  const rows: ShillerRow[] = [];
+
+  for (let i = 8; i < raw.length; i++) {
+    const r = raw[i];
+    const dateVal = r[0];
+    if (typeof dateVal !== 'number' || isNaN(dateVal)) continue;
+
+    // Parse YYYY.MM format
+    const year = Math.floor(dateVal);
+    const month = Math.round((dateVal - year) * 100);
+    if (month < 1 || month > 12) continue;
+
+    const price = parseFloat(r[1]);
+    const dividend = parseFloat(r[2]);
+    const cpi = parseFloat(r[4]);
+    const rateGS10 = parseFloat(r[6]);
+    const monthlyBondTR = parseFloat(r[17]); // column R: monthly bond TR factor
+
+    if (isNaN(price) || isNaN(cpi)) continue;
+
+    // End-of-month date
+    const lastDay = new Date(year, month, 0).getDate();
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    rows.push({
+      date: dateStr,
+      year,
+      month,
+      price: isNaN(price) ? 0 : price,
+      dividend: isNaN(dividend) ? 0 : dividend,
+      cpi: isNaN(cpi) ? 0 : cpi,
+      rateGS10: isNaN(rateGS10) ? 0 : rateGS10,
+      monthlyBondTR: isNaN(monthlyBondTR) ? 1 : monthlyBondTR,
+    });
+  }
+
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Calculate S&P 500 Nominal Total Return Index
+//
+// Monthly total return = (P_t + D_t/12) / P_{t-1}
+// We build a cumulative TR index from this.
+// Shiller's "Real Total Return Price" (col 9) is inflation-adjusted.
+// We want NOMINAL for the backtest engine.
+// ---------------------------------------------------------------------------
+
+function buildSP500TR(rows: ShillerRow[]): { date: string; price: number }[] {
+  const result: { date: string; price: number }[] = [];
+  let trIndex = 1.0;
+
+  // First month
+  result.push({ date: rows[0].date, price: trIndex });
+
+  for (let i = 1; i < rows.length; i++) {
+    const prev = rows[i - 1];
+    const curr = rows[i];
+
+    if (prev.price > 0 && curr.price > 0) {
+      // Monthly total return including dividends
+      // r = (P_t + D_t/12 - P_{t-1}) / P_{t-1} = (P_t + D_t/12) / P_{t-1} - 1
+      const monthlyReturn = (curr.price + curr.dividend / 12) / prev.price - 1;
+      trIndex *= (1 + monthlyReturn);
+    }
+
+    result.push({ date: curr.date, price: Math.round(trIndex * 10000) / 10000 });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Calculate US 10Y Treasury Nominal Total Return Index
+//
+// Shiller column 17 contains a cumulative bond total return index (starting at 1.0).
+// We can use this directly as the bond TR proxy.
+// ---------------------------------------------------------------------------
+
+function buildBondTR(rows: ShillerRow[]): { date: string; price: number }[] {
+  const result: { date: string; price: number }[] = [];
+
+  // Use Shiller's monthly bond total return factors (col 17) to build cumulative index
+  let bondIndex = 100.0;
+
+  for (let i = 0; i < rows.length; i++) {
+    if (i === 0) {
+      result.push({ date: rows[i].date, price: bondIndex });
+      continue;
+    }
+
+    // Col 17 is monthly total return factor (1 + r) for bonds
+    // When missing or invalid, keep the previous value (no change)
+    const monthlyFactor = rows[i].monthlyBondTR;
+    if (monthlyFactor > 0 && !isNaN(monthlyFactor)) {
+      bondIndex *= monthlyFactor;
+    }
+
+    result.push({ date: rows[i].date, price: Math.round(bondIndex * 10000) / 10000 });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: Calculate Long-Term Treasury TR (for TLT proxy)
+//
+// Use the same GS10 yield but with duration ≈ 16 (20+ year)
+// Start from 1950s to give enough history
+// ---------------------------------------------------------------------------
+
+function buildLongBondTR(rows: ShillerRow[]): { date: string; price: number }[] {
+  const result: { date: string; price: number }[] = [];
+  let bondIndex = 100.0;
+
+  for (let i = 0; i < rows.length; i++) {
+    if (i === 0) {
+      result.push({ date: rows[i].date, price: bondIndex });
+      continue;
+    }
+
+    const prevYield = rows[i - 1].rateGS10 / 100;
+    const currYield = rows[i].rateGS10 / 100;
+
+    if (prevYield > 0) {
+      const couponReturn = prevYield / 12;
+      // Use longer duration for long bonds: ~16
+      const priceReturn = -16.0 * (currYield - prevYield);
+      const monthlyReturn = couponReturn + priceReturn;
+      bondIndex *= (1 + monthlyReturn);
+    }
+
+    result.push({ date: rows[i].date, price: Math.round(bondIndex * 10000) / 10000 });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Step 5: T-Bill / Cash returns
+//
+// Uses FRED DTB3 (3-Month T-Bill secondary market rate) for 1934+ and
+// Shiller short-rate approximation for pre-1934.
+// ---------------------------------------------------------------------------
+
+function buildCashTR(
+  rows: ShillerRow[],
+  dtb3Series: { date: string; value: number }[],
+): { date: string; price: number }[] {
+  // Build a lookup from date (YYYY-MM) to DTB3 annual rate
+  const dtb3ByMonth = new Map<string, number>();
+  for (const pt of dtb3Series) {
+    dtb3ByMonth.set(pt.date.substring(0, 7), pt.value);
+  }
+
+  const result: { date: string; price: number }[] = [];
+  let cashIndex = 100.0;
+
+  for (let i = 0; i < rows.length; i++) {
+    if (i === 0) {
+      result.push({ date: rows[i].date, price: cashIndex });
+      continue;
+    }
+
+    const yearMonth = rows[i].date.substring(0, 7);
+    const dtb3Rate = dtb3ByMonth.get(yearMonth);
+
+    let annualRate: number;
+    if (dtb3Rate !== undefined && dtb3Rate > 0) {
+      // Use actual T-Bill rate from FRED (value is already in percent)
+      annualRate = dtb3Rate / 100;
+    } else {
+      // Pre-1934: use Shiller GS10 approximation
+      const prevYield = rows[i - 1].rateGS10 / 100;
+      annualRate = Math.max(prevYield * 0.7, 0.001);
+    }
+
+    const monthlyReturn = annualRate / 12;
+    cashIndex *= (1 + monthlyReturn);
+
+    result.push({ date: rows[i].date, price: Math.round(cashIndex * 10000) / 10000 });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Step 6: CPI data
+//
+// Uses FRED CPIAUCSL (Consumer Price Index for All Urban Consumers) for
+// 1947+ and Shiller CPI data for pre-1947, ratio-aligned at the splice point.
+// ---------------------------------------------------------------------------
+
+function buildCPI(
+  rows: ShillerRow[],
+  fredCpiSeries: { date: string; value: number }[],
+): Map<string, number> {
+  // Build lookup from FRED CPI
+  const fredByMonth = new Map<string, number>();
+  for (const pt of fredCpiSeries) {
+    fredByMonth.set(pt.date.substring(0, 7), pt.value);
+  }
+
+  // Find splice date: first month where both Shiller and FRED have data
+  const spliceDate = '1947-01';
+
+  // Find Shiller CPI at splice point and corresponding FRED value
+  const shillerAtSplice = rows.find(r => r.date.startsWith(spliceDate));
+  const fredAtSplice = fredByMonth.get(spliceDate);
+
+  if (!shillerAtSplice || !fredAtSplice) {
+    // Fallback: use Shiller data only
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      if (row.cpi > 0) map.set(row.date, row.cpi);
+    }
+    return map;
+  }
+
+  const ratio = fredAtSplice / shillerAtSplice.cpi;
+
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const yearMonth = row.date.substring(0, 7);
+    const fredCpi = fredByMonth.get(yearMonth);
+
+    if (fredCpi !== undefined && fredCpi > 0) {
+      map.set(row.date, Math.round(fredCpi * 100) / 100);
+    } else if (row.cpi > 0) {
+      // Pre-1947: use ratio-scaled Shiller CPI
+      map.set(row.date, Math.round(row.cpi * ratio * 100) / 100);
+    }
+  }
+
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Step 7: Write CSVs
+// ---------------------------------------------------------------------------
+
+function writeCSV(filePath: string, data: { date: string; price: number }[]): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const lines = ['date,price'];
+  for (const point of data) {
+    lines.push(`${point.date},${point.price}`);
+  }
+  fs.writeFileSync(filePath, lines.join('\n') + '\n');
+  console.log(`  Wrote ${filePath} (${data.length} data points)`);
+}
+
+function writeCPI(filePath: string, data: Map<string, number>): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const lines = ['date,cpi'];
+  for (const [date, cpi] of data) {
+    lines.push(`${date},${cpi}`);
+  }
+  fs.writeFileSync(filePath, lines.join('\n') + '\n');
+  console.log(`  Wrote ${filePath} (${data.size} data points)`);
+}
+
+// ---------------------------------------------------------------------------
+// Step 8: Fetch Gold data from Yahoo Finance via proxy
+// ---------------------------------------------------------------------------
+
+async function fetchGoldData(): Promise<{ date: string; price: number }[]> {
+  // Use GLD ETF data (converted to spot-equivalent by multiplying by ~10)
+  // GLD has cleaner data than GC=F futures (no contract roll artifacts)
+  // GLD started 2004-11-18
+
+  console.log('  Fetching gold price data via GLD ETF...');
+
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const from2004 = Math.floor(new Date('2004-11-01').getTime() / 1000);
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/GLD?interval=1mo&period1=${from2004}&period2=${now}`;
+    const res = await undiciFetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+    });
+
+    if (!res.ok) {
+      console.log(`  GLD fetch failed: ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json() as any;
+    const result = json?.chart?.result?.[0];
+    if (!result) return [];
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const quotes = result.indicators?.adjclose?.[0]?.adjclose ??
+      result.indicators?.quote?.[0]?.close ?? [];
+
+    // GLD is designed to track ~1/10 oz of gold
+    // Convert to spot-equivalent by multiplying by the known ratio
+    // At inception (Nov 2004): GLD=$45.12, spot=$440 → ratio ≈ 9.75
+    // More recently: GLD=$423, spot=$4567 → ratio ≈ 10.79
+    // The ratio drifts due to GLD's 0.40% expense ratio and tracking differences
+    // We use a factor of 10 as an approximation
+
+    const data: { date: string; price: number }[] = [];
+    for (let i = 0; i < Math.min(timestamps.length, quotes.length); i++) {
+      if (quotes[i] === null || quotes[i] === undefined) continue;
+      const date = new Date(timestamps[i] * 1000);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, date.getMonth() + 1, 0).getDate();
+      const d = String(lastDay).padStart(2, '0');
+      // GLD ≈ 1/10 oz gold → multiply by 10 for spot-equivalent
+      data.push({
+        date: `${y}-${m}-${d}`,
+        price: Math.round(quotes[i] * 10 * 100) / 100,
+      });
+    }
+
+    console.log(`  Got ${data.length} GLD data points (${data[0].date} to ${data[data.length-1].date})`);
+    return data;
+  } catch (err) {
+    console.log(`  GLD fetch error: ${(err as Error).message}`);
+    return [];
+  }
+}
+
+async function fetchGoldViaGLD(): Promise<{ date: string; price: number }[]> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const from2004 = Math.floor(new Date('2004-11-01').getTime() / 1000);
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/GLD?interval=1mo&period1=${from2004}&period2=${now}`;
+    const res = await undiciFetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+    });
+
+    if (!res.ok) {
+      console.log(`  GLD fetch failed: ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json() as any;
+    const result = json?.chart?.result?.[0];
+    if (!result) return [];
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const quotes = result.indicators?.adjclose?.[0]?.adjclose ??
+      result.indicators?.quote?.[0]?.close ?? [];
+
+    const data: { date: string; price: number }[] = [];
+    for (let i = 0; i < Math.min(timestamps.length, quotes.length); i++) {
+      if (quotes[i] === null || quotes[i] === undefined) continue;
+      const date = new Date(timestamps[i] * 1000);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, date.getMonth() + 1, 0).getDate();
+      const d = String(lastDay).padStart(2, '0');
+      data.push({
+        date: `${y}-${m}-${d}`,
+        price: quotes[i],
+      });
+    }
+
+    return data;
+  } catch (err) {
+    console.log(`  GLD fetch error: ${(err as Error).message}`);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 9: Build complete gold price series
+//
+// Combines:
+// - Historical fixed prices (1871-1974, gold standard/Bretton Woods/transition)
+// - Approximate annual prices (1975-1999, based on LBMA year-end fixings)
+// - Yahoo Finance GC=F data (2000-present, real market data)
+// ---------------------------------------------------------------------------
+
+const GOLD_APPROX_PRICES: Record<number, number> = {
+  1975: 140, 1976: 134, 1977: 165, 1978: 226, 1979: 512,
+  1980: 589, 1981: 400, 1982: 448, 1983: 382, 1984: 309,
+  1985: 327, 1986: 391, 1987: 484, 1988: 410, 1989: 401,
+  1990: 391, 1991: 353, 1992: 333, 1993: 391, 1994: 383,
+  1995: 387, 1996: 369, 1997: 290, 1998: 288, 1999: 290,
+  2000: 272, 2001: 279, 2002: 348, 2003: 417, 2004: 438,
+  2005: 518, 2006: 638, 2007: 836, 2008: 882, 2009: 1096,
+  2010: 1421, 2011: 1566, 2012: 1675, 2013: 1205, 2014: 1184,
+  2015: 1060, 2016: 1151, 2017: 1303, 2018: 1282, 2019: 1523,
+  2020: 1895, 2021: 1828, 2022: 1824, 2023: 2063, 2024: 2615,
+  2025: 3050,
+};
+
+function buildCompleteGold(
+  rows: ShillerRow[],
+  yahooData: { date: string; price: number }[],
+): { date: string; price: number }[] {
+  // Build Yahoo lookup by year-month
+  const yahooByMonth = new Map<string, number>();
+  for (const pt of yahooData) {
+    yahooByMonth.set(pt.date.substring(0, 7), pt.price);
+  }
+
+  const result: { date: string; price: number }[] = [];
+
+  for (const row of rows) {
+    let goldPrice: number;
+    const year = row.year;
+
+    // Prefer Yahoo Finance real data
+    const yahooPrice = yahooByMonth.get(row.date.substring(0, 7));
+    if (yahooPrice && yahooPrice > 0) {
+      goldPrice = yahooPrice;
+    } else if (year <= 1933) {
+      goldPrice = 20.67;
+    } else if (year <= 1967) {
+      goldPrice = 35.0;
+    } else if (year === 1968) {
+      goldPrice = 35.0 + (row.month / 12) * 8;
+    } else if (year === 1969) {
+      goldPrice = 42.0 + (row.month / 12) * 3;
+    } else if (year === 1970) {
+      goldPrice = 38.0 + (row.month / 12) * 2;
+    } else if (year === 1971) {
+      goldPrice = row.month < 8 ? 40.0 : 42.0 + (row.month - 8) / 4 * 3;
+    } else if (year === 1972) {
+      goldPrice = 45.0 + row.month * 1.5;
+    } else if (year === 1973) {
+      goldPrice = 65.0 + row.month * 4.0;
+    } else if (year === 1974) {
+      goldPrice = 120.0 + row.month * 4.0;
+    } else {
+      // 1975+: interpolate from approximate annual prices
+      const thisYearPrice = GOLD_APPROX_PRICES[year];
+      const nextYearPrice = GOLD_APPROX_PRICES[year + 1];
+
+      if (thisYearPrice && nextYearPrice) {
+        // Linear interpolation between year-end prices
+        const frac = (row.month - 1) / 12;
+        goldPrice = thisYearPrice + (nextYearPrice - thisYearPrice) * frac;
+      } else if (thisYearPrice) {
+        goldPrice = thisYearPrice;
+      } else {
+        // Past the last known year, keep last price
+        goldPrice = result[result.length - 1]?.price ?? 2000;
+      }
+    }
+
+    result.push({ date: row.date, price: Math.round(goldPrice * 100) / 100 });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  console.log('Generating real historical proxy data from Shiller XLS...\n');
+
+  // 1. Parse Shiller data
+  console.log('1. Parsing Shiller data...');
+  const rows = parseShillerData();
+  console.log(`   Parsed ${rows.length} months (${rows[0].date} to ${rows[rows.length - 1].date})\n`);
+
+  // 2. Build S&P 500 TR
+  console.log('2. Building S&P 500 Total Return series...');
+  const sp500 = buildSP500TR(rows);
+  writeCSV(path.join(DATA_DIR, 'proxies/equity/sp500_tr.csv'), sp500);
+
+  // 3. Build 10Y Treasury TR
+  console.log('3. Building US 10Y Treasury Total Return series...');
+  const bond = buildBondTR(rows);
+  writeCSV(path.join(DATA_DIR, 'proxies/bond/us_10y_tr.csv'), bond);
+
+  // 4. Build Long Bond TR (for TLT)
+  console.log('4. Building Long Treasury Total Return series (for TLT)...');
+  const longBond = buildLongBondTR(rows);
+  writeCSV(path.join(DATA_DIR, 'proxies/bond/us_long_tr.csv'), longBond);
+
+  // 5. Fetch FRED DTB3 data for T-Bill rates
+  console.log('5. Fetching FRED DTB3 (3-Month T-Bill) data...');
+  let dtb3Series: { date: string; value: number }[] = [];
+  try {
+    dtb3Series = await fetchFredSeries('DTB3', '1934-01-01', '2026-12-31');
+    console.log(`   Got ${dtb3Series.length} DTB3 data points (${dtb3Series[0]?.date} to ${dtb3Series[dtb3Series.length - 1]?.date})`);
+    if (dtb3Series.length > 0) {
+      const maxRate = Math.max(...dtb3Series.map(d => d.value));
+      const maxDate = dtb3Series.find(d => d.value === maxRate)?.date;
+      console.log(`   Max T-Bill rate: ${maxRate.toFixed(2)}% at ${maxDate}`);
+    }
+  } catch (err) {
+    console.log(`   FRED DTB3 unavailable: ${(err as Error).message}`);
+    console.log('   Falling back to GS10*0.7 approximation');
+  }
+
+  // 6. Build Cash TR using FRED DTB3 + Shiller fallback
+  console.log('6. Building Cash/T-Bill Total Return series...');
+  const cash = buildCashTR(rows, dtb3Series);
+  writeCSV(path.join(DATA_DIR, 'proxies/bond/cash.csv'), cash);
+
+  // 7. Build Aggregate Bond TR (same as 10Y for simplicity, slightly lower vol)
+  console.log('7. Building US Aggregate Bond Total Return series...');
+  writeCSV(path.join(DATA_DIR, 'proxies/bond/us_agg_bond_tr.csv'), bond);
+
+  // 8. CPI — use FRED CPIAUCSL (1947+) + Shiller (pre-1947) spliced
+  console.log('8. Building US CPI series (FRED CPIAUCSL + Shiller)...');
+  let fredCpiSeries: { date: string; value: number }[] = [];
+  try {
+    fredCpiSeries = await fetchFredSeries('CPIAUCSL', '1947-01-01', '2026-12-31');
+    console.log(`   Got ${fredCpiSeries.length} FRED CPI data points (${fredCpiSeries[0]?.date} to ${fredCpiSeries[fredCpiSeries.length - 1]?.date})`);
+    if (fredCpiSeries.length > 0) {
+      console.log(`   CPI at ${fredCpiSeries[0].date}: ${fredCpiSeries[0].value}, at ${fredCpiSeries[fredCpiSeries.length-1].date}: ${fredCpiSeries[fredCpiSeries.length-1].value}`);
+    }
+  } catch (err) {
+    console.log(`   FRED CPIAUCSL unavailable: ${(err as Error).message}`);
+    console.log('   Falling back to Shiller CPI');
+  }
+  const cpi = buildCPI(rows, fredCpiSeries);
+  writeCPI(path.join(DATA_DIR, 'inflation/us_cpi.csv'), cpi);
+
+  // 9. Gold - check proxy first, then fetch GLD or use built-in estimates
+  console.log('9. Building Gold price series...');
+  const proxyOk = await checkProxy();
+  let yahooGold: { date: string; price: number }[] = [];
+  if (proxyOk) {
+    yahooGold = await fetchGoldData();
+  }
+  const goldData = buildCompleteGold(rows, yahooGold);
+  writeCSV(path.join(DATA_DIR, 'proxies/commodity/gold_spot.csv'), goldData);
+
+  // 10. Update etf_map.json to use the new proxies
+  console.log('\n10. Updating ETF mappings...');
+  updateEtfMappings();
+
+  // 11. Update data_version.json
+  console.log('11. Updating data version...');
+  const version = {
+    version: 2,
+    lastUpdated: new Date().toISOString().split('T')[0],
+    description: 'Real historical data from Shiller (1871-present) + FRED T-Bill rates + gold spot prices',
+  };
+  fs.writeFileSync(
+    path.join(DATA_DIR, 'data_version.json'),
+    JSON.stringify(version, null, 2) + '\n',
+  );
+
+  console.log('\nDone! Real historical proxy data generated successfully.');
+}
+
+function updateEtfMappings(): void {
+  const etfMapPath = path.join(DATA_DIR, 'etf_map.json');
+  const etfMap = JSON.parse(fs.readFileSync(etfMapPath, 'utf-8')) as any[];
+
+  // Update key ETF proxy assignments to use the new long-history proxies
+  const updates: Record<string, string> = {
+    'VTI': 'SP500_TR',
+    'VOO': 'SP500_TR',
+    'IVV': 'SP500_TR',
+    'SPY': 'SP500_TR',
+    'VXUS': 'MSCI_EAFE_TR',       // Keep existing for international
+    'VEA': 'MSCI_EAFE_TR',
+    'VWO': 'MSCI_EM_TR',
+    'TLT': 'US_LONG_TR',           // Use new long bond proxy
+    'EDV': 'US_LONG_TR',
+    'IEF': 'US_10Y_TR',
+    'IEI': 'US_10Y_TR',
+    'SHY': 'CASH',
+    'BIL': 'CASH',
+    'BND': 'US_AGG_BOND_TR',
+    'AGG': 'US_AGG_BOND_TR',
+    'GLD': 'GOLD_SPOT',
+    'IAU': 'GOLD_SPOT',
+  };
+
+  for (const entry of etfMap) {
+    if (updates[entry.symbol]) {
+      entry.proxySymbol = updates[entry.symbol];
+    }
+  }
+
+  // Ensure US_LONG_TR and updated proxies exist in the map
+  fs.writeFileSync(etfMapPath, JSON.stringify(etfMap, null, 2) + '\n');
+  console.log('   ETF map updated.');
+}
+
+main().catch((err) => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});

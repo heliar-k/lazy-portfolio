@@ -33,7 +33,7 @@
     "provider": "State Street",
     "expenseRatio": 0.0009,
     "inceptionDate": "1993-01-22",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SPY_BLENDED"
   },
   {
     "symbol": "VV",
@@ -609,7 +609,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0003,
     "inceptionDate": "2007-04-03",
-    "proxySymbol": "US_AGG_BOND_TR"
+    "proxySymbol": "BND_BLENDED"
   },
   {
     "symbol": "TLT",
@@ -621,7 +621,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0015,
     "inceptionDate": "2002-07-22",
-    "proxySymbol": "US_10Y_TR"
+    "proxySymbol": "TLT_BLENDED"
   },
   {
     "symbol": "IEF",
@@ -657,7 +657,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0015,
     "inceptionDate": "2002-07-22",
-    "proxySymbol": "CASH"
+    "proxySymbol": "SHY_BLENDED"
   },
   {
     "symbol": "BSV",
@@ -1150,5 +1150,75 @@
     "expenseRatio": 0.0035,
     "inceptionDate": "2007-10-02",
     "proxySymbol": "INTL_GOVT_BOND_TR"
+  },
+  {
+    "symbol": "VXUS",
+    "name": "Vanguard Total International Stock ETF",
+    "nameZh": "先锋国际股票ETF",
+    "assetClass": "intl_developed",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "Vanguard",
+    "expenseRatio": 0.0007,
+    "inceptionDate": "2011-01-26",
+    "proxySymbol": "MSCI_EAFE_TR"
+  },
+  {
+    "symbol": "EDV",
+    "name": "Vanguard Extended Duration Treasury ETF",
+    "nameZh": "先锋超长期国债ETF",
+    "assetClass": "us_treasury_long",
+    "region": "US",
+    "currency": "USD",
+    "provider": "Vanguard",
+    "expenseRatio": 0.0006,
+    "inceptionDate": "2007-12-06",
+    "proxySymbol": "US_LONG_TR"
+  },
+  {
+    "symbol": "AGG",
+    "name": "iShares Core US Aggregate Bond ETF",
+    "nameZh": "安硕核心美国综合债券ETF",
+    "assetClass": "us_agg_bond",
+    "region": "US",
+    "currency": "USD",
+    "provider": "iShares",
+    "expenseRatio": 0.0003,
+    "inceptionDate": "2003-09-22",
+    "proxySymbol": "US_AGG_BOND_TR"
+  },
+  {
+    "symbol": "IAU",
+    "name": "iShares Gold Trust",
+    "nameZh": "安硕黄金信托",
+    "assetClass": "gold",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "iShares",
+    "expenseRatio": 0.0025,
+    "inceptionDate": "2005-01-21",
+    "proxySymbol": "GOLD_SPOT"
+  },
+  {
+    "symbol": "BRK-A",
+    "name": "Berkshire Hathaway Inc.",
+    "assetClass": "us_large_cap",
+    "region": "US",
+    "currency": "USD",
+    "provider": "Berkshire Hathaway",
+    "expenseRatio": 0,
+    "inceptionDate": "1980-03-17",
+    "proxySymbol": "SP500_TR"
+  },
+  {
+    "symbol": "^BTC",
+    "name": "Bitcoin (no historical proxy available)",
+    "assetClass": "commodities",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "N/A",
+    "expenseRatio": 0,
+    "inceptionDate": "2100-01-01",
+    "proxySymbol": ""
   }
 ]

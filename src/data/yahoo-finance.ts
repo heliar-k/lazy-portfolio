@@ -1,8 +1,9 @@
 /**
  * Yahoo Finance data fetcher for live ETF prices and historical data.
  *
- * Uses Yahoo Finance's public chart API (no API key required).
- * Rate limited — do not hammer the endpoint.
+ * In development, requests are proxied through Vite's dev server
+ * (see vite.config.ts server.proxy) to bypass CORS and network restrictions.
+ * In production, requests go directly to Yahoo Finance.
  */
 
 export interface LiveQuote {
@@ -31,6 +32,9 @@ interface CacheEntry<T> {
 const quoteCache = new Map<string, CacheEntry<LiveQuote>>();
 const historyCache = new Map<string, CacheEntry<HistoricalPoint[]>>();
 
+// Use Vite proxy in dev, direct URL in production
+const YAHOO_BASE = import.meta.env.DEV ? '/api/yahoo' : 'https://query1.finance.yahoo.com';
+
 /**
  * Fetch live quote for a single ETF.
  */
@@ -41,7 +45,7 @@ export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> 
   }
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1mo`;
+    const url = `${YAHOO_BASE}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1mo`;
     const res = await fetch(url);
 
     if (!res.ok) return null;
@@ -88,7 +92,7 @@ export async function fetchHistoricalPrices(
     const period1 = Math.floor(new Date(startDate + '-01').getTime() / 1000);
     const period2 = Math.floor(new Date(endDate + '-01').getTime() / 1000);
 
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&period1=${period1}&period2=${period2}`;
+    const url = `${YAHOO_BASE}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&period1=${period1}&period2=${period2}`;
     const res = await fetch(url);
 
     if (!res.ok) return [];

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { PortfolioHolding, PortfolioDefinition } from '../engine/types';
 import { validatePortfolio, normalizeWeights } from '../lib/validate';
+import { createMigration } from './migrations';
 
 interface PortfolioState {
   // Current working portfolio (may be unsaved)
@@ -166,6 +167,7 @@ export const usePortfolioStore = create<PortfolioState>()(
     {
       name: 'lazy-portfolio-portfolios',
       version: 1,
+      migrate: createMigration('lazy-portfolio-portfolios', 1),
     },
   ),
 );

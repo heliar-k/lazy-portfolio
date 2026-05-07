@@ -103,7 +103,9 @@ function isCalendarTrigger(
     case 'quarterly':
       return month % 3 === 2; // Mar, Jun, Sep, Dec
     case 'annual':
-      return month === 11; // December
+      // Rebalance at January (month 0), matching "rebalance at January 1st" convention.
+      // Skip month 0 (first January in the series already starts at target).
+      return month === 0 && monthIdx > 0;
   }
 }
 
