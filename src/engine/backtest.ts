@@ -99,9 +99,15 @@ export function runBacktest(
     initialCapital,
   );
 
-  // 7. Inflation adjustment (mutates portfolioValueReal / monthlyReturnReal)
+  // 7. Inflation adjustment
   if (params.inflationAdjusted) {
     timeSeries = adjustForInflation(timeSeries, cpiSeries);
+    // Swap nominal ↔ real so metrics/charts use inflation-adjusted values.
+    // Nominal values are preserved in the *Real fields for reference.
+    for (const point of timeSeries) {
+      [point.portfolioValue, point.portfolioValueReal] = [point.portfolioValueReal, point.portfolioValue];
+      [point.monthlyReturn, point.monthlyReturnReal] = [point.monthlyReturnReal, point.monthlyReturn];
+    }
   }
 
   // 8. Compute summary metrics

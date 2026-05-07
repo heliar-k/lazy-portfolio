@@ -15,8 +15,18 @@ import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 import { ScatterChart } from '@/components/charts/ScatterChart';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { timeSeriesToCSV, downloadCSV } from '@/lib/export-csv';
+import type { BacktestParameters, PortfolioDefinition } from '@/engine/types';
 
 type BrushWindow = { start: string; end: string } | null;
+
+function paramsSignature(params: BacktestParameters, portfolio: PortfolioDefinition): string {
+  const holdings = portfolio.holdings.map(h => `${h.asset.symbol}:${h.targetWeight}`).join(',');
+  const rebal = params.rebalancing.type === 'calendar'
+    ? `cal:${params.rebalancing.frequency}`
+    : `band:${(params.rebalancing as { type: 'tolerance_band'; threshold: number }).threshold}`;
+  return [holdings, params.startDate, params.endDate, params.initialCapital, params.displayCurrency,
+    params.inflationRegion, String(params.inflationAdjusted), rebal].join('|');
+}
 
 export function BacktestPage() {
   const { t } = useTranslation();
@@ -30,6 +40,7 @@ export function BacktestPage() {
     run, reset: _reset } = useBacktest();
 
   const [brushWindow, setBrushWindow] = useState<BrushWindow>(null);
+  const [lastRunSignature, setLastRunSignature] = useState<string | null>(null);
 
   // Clear brush when new backtest starts
   useEffect(() => {
@@ -64,6 +75,7 @@ export function BacktestPage() {
 
   const handleRunBacktest = useCallback(async () => {
     const backtestParams = { ...params, portfolio };
+    setLastRunSignature(paramsSignature(params, portfolio));
     await run(backtestParams);
 
     // Run benchmark if selected
@@ -166,6 +178,22 @@ export function BacktestPage() {
             className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
           >
             Export CSV
+          </button>
+        </div>
+      )}
+
+      {status === 'ready' && result && lastRunSignature !== null && lastRunSignature !== paramsSignature(params, portfolio) && (
+        <div className="mt-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+          <span className="text-amber-600 text-sm">⚠</span>
+          <span className="text-sm text-amber-700">
+            {t('backtest.paramsChanged')}
+          </span>
+          <button
+            onClick={handleRunBacktest}
+            disabled={!canRun || hookStatus === 'running'}
+            className="ml-auto text-xs px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors disabled:opacity-40"
+          >
+            {t('backtest.run')}
           </button>
         </div>
       )}

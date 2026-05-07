@@ -145,7 +145,7 @@ function parseCpiCsv(csv: string): Map<string, number> {
   const lines = csv.trim().split('\n');
   const map = new Map<string, number>();
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 

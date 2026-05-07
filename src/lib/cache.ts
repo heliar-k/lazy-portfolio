@@ -1,6 +1,6 @@
 import type { BacktestParameters, BacktestResult } from '../engine/types';
 
-const CACHE_KEY_PREFIX = 'btcache_v5_';
+const CACHE_KEY_PREFIX = 'btcache_v6_';
 const MAX_ENTRIES = 20;
 
 interface CacheEntry {
