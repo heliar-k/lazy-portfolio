@@ -4,8 +4,6 @@
     "backtest": "Backtest",
     "compare": "Compare",
     "templates": "Templates",
-    "market": "Market",
-    "withdrawal": "Withdrawal",
     "unsavedChanges": "You have unsaved changes. Leave without saving?",
     "dataUpdated": "Data updated",
     "refreshData": "Clear browser cache and reload (does not update source data)",

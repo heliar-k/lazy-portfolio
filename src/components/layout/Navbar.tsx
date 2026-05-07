@@ -61,12 +61,6 @@ export function Navbar() {
           <NavLink to="/templates" className={linkClass}>
             {t('nav.templates')}
           </NavLink>
-          <NavLink to="/market" className={linkClass}>
-            {t('nav.market')}
-          </NavLink>
-          <NavLink to="/withdrawal" className={linkClass}>
-            {t('nav.withdrawal')}
-          </NavLink>
         </div>
 
         <div className="flex items-center gap-3">
