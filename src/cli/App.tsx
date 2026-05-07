@@ -12,6 +12,7 @@ import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
 import { computeSWR } from '../engine/withdrawal.js';
 import type {
   PortfolioDefinition,
+  PortfolioHolding,
   BacktestResult,
   BacktestParameters,
   RebalancingStrategy,
@@ -26,8 +27,13 @@ type AppMode = 'backtest' | 'compare' | 'swr';
 
 type View =
   | 'mode'
+  | 'add_type'
   | 'category'
   | 'portfolio'
+  | 'etf_class'
+  | 'etf_select'
+  | 'custom_build'
+  | 'custom_weight'
   | 'params'
   | 'running'
   | 'results'
@@ -111,6 +117,13 @@ export default function App() {
   const [compareTab, setCompareTab] = useState<CompareTab>('table');
   const [_compareStep, setCompareStep] = useState(0);
 
+  // Custom portfolio state
+  const [customHoldings, setCustomHoldings] = useState<PortfolioHolding[]>([]);
+  const [selectedEtfClass, setSelectedEtfClass] = useState('');
+  const [pendingEtf, setPendingEtf] = useState<EtfMapEntry | null>(null);
+  const [weightInput, setWeightInput] = useState('');
+  const [isCustomMode, setIsCustomMode] = useState(false);
+
   // Monte Carlo state
   const [mcYears, setMcYears] = useState(10);
 
@@ -126,6 +139,14 @@ export default function App() {
 
   // Data
   const etfMap = useMemo(() => loadEtfMap(), []);
+  const etfsWithProxy = useMemo(
+    () => etfMap.filter((e) => e.proxySymbol),
+    [etfMap],
+  );
+  const etfAssetClasses = useMemo(
+    () => [...new Set(etfsWithProxy.map((e) => e.assetClass))],
+    [etfsWithProxy],
+  );
   const metadata = useMemo(
     () => getTemplateMetadata().filter((t) => t.holdingCount > 0),
     [],
@@ -148,6 +169,42 @@ export default function App() {
       };
     });
     return all.find((p) => p.id === id);
+  };
+
+  const etfToHolding = (entry: EtfMapEntry, weight: number): PortfolioHolding => ({
+    asset: {
+      symbol: entry.symbol, name: entry.name, nameZh: entry.nameZh,
+      assetClass: entry.assetClass as any, region: entry.region as any,
+      currency: entry.currency, provider: entry.provider,
+      expenseRatio: entry.expenseRatio, inceptionDate: entry.inceptionDate,
+    },
+    targetWeight: weight,
+  });
+
+  const etfToPortfolio = (entry: EtfMapEntry): PortfolioDefinition => ({
+    id: `single_${entry.symbol.toLowerCase()}`,
+    name: `${entry.symbol} (${entry.name})`,
+    holdings: [etfToHolding(entry, 1.0)],
+    tags: ['single-etf'],
+  });
+
+  const customToPortfolio = (holdings: PortfolioHolding[]): PortfolioDefinition => ({
+    id: `custom_${holdings.map((h) => h.asset.symbol).join('_').toLowerCase()}`,
+    name: holdings.map((h) => `${h.asset.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(' / '),
+    holdings,
+    tags: ['custom'],
+  });
+
+  const handlePortfolioSelected = (p: PortfolioDefinition) => {
+    if (mode === 'compare') {
+      setComparePortfolios((prev) => [...prev, p]);
+      setCompareStep((s) => s + 1);
+      setView('compare_select');
+    } else {
+      setPortfolio(p);
+      setParamStep(0);
+      setView('params');
+    }
   };
 
   const buildParams = (): BacktestParameters | null => {
@@ -260,6 +317,7 @@ export default function App() {
 
   const isTextEditing = [1, 2, 3].includes(paramStep) && view === 'params';
   const isSWRTextEditing = view === 'swr_params';
+  const isWeightEditing = view === 'custom_weight';
 
   useInput(
     (input, key) => {
@@ -277,7 +335,7 @@ export default function App() {
           const idx = RESULT_TABS.findIndex((t) => t.key === tab);
           setTab(RESULT_TABS[(idx - 1 + RESULT_TABS.length) % RESULT_TABS.length].key);
         } else if (input === 'p') {
-          setView('category');
+          setView('add_type');
         } else if (input === 's') {
           setParamStep(0);
           setView('params');
@@ -299,7 +357,7 @@ export default function App() {
           const idx = SWR_TABS.findIndex((t) => t.key === swrTab);
           setSwrTab(SWR_TABS[(idx - 1 + SWR_TABS.length) % SWR_TABS.length].key);
         } else if (input === 'p') {
-          setView('category');
+          setView('add_type');
         } else if (key.escape) {
           if (result) setView('results');
           else setView('mode');
@@ -322,19 +380,38 @@ export default function App() {
       if (view === 'mode' && key.escape) {
         if (result) setView('results');
       }
-      if (view === 'category' && key.escape) {
-        if (result) setView('results');
+      if (view === 'add_type' && key.escape) {
+        if (mode === 'compare') setView('compare_select');
         else setView('mode');
+      }
+      if (view === 'category' && key.escape) {
+        setView('add_type');
       }
       if (view === 'portfolio' && key.escape) {
         setView('category');
       }
+      if (view === 'etf_class' && key.escape) {
+        if (isCustomMode) setView('custom_build');
+        else setView('add_type');
+      }
+      if (view === 'etf_select' && key.escape) {
+        setView('etf_class');
+      }
+      if (view === 'custom_build' && key.escape) {
+        setView('add_type');
+      }
+      if (view === 'custom_weight' && key.escape) {
+        setView('etf_select');
+      }
       if (view === 'params' && key.escape && !isTextEditing) {
         if (result) setView('results');
-        else setView('category');
+        else setView('add_type');
+      }
+      if (view === 'compare_select' && key.escape) {
+        setView('mode');
       }
     },
-    { isActive: !isTextEditing && !isSWRTextEditing && !['running', 'swr_running', 'compare_running'].includes(view) },
+    { isActive: !isTextEditing && !isSWRTextEditing && !isWeightEditing && !['running', 'swr_running', 'compare_running'].includes(view) },
   );
 
   const height = process.stdout.rows || 24;
@@ -361,7 +438,23 @@ export default function App() {
               setCompareStep(0);
               setView('compare_select');
             } else {
+              setView('add_type');
+            }
+          }} />
+        )}
+
+        {view === 'add_type' && (
+          <AddTypeView onSelect={(type) => {
+            if (type === 'template') {
+              setIsCustomMode(false);
               setView('category');
+            } else if (type === 'single_etf') {
+              setIsCustomMode(false);
+              setView('etf_class');
+            } else if (type === 'custom') {
+              setIsCustomMode(true);
+              setCustomHoldings([]);
+              setView('custom_build');
             }
           }} />
         )}
@@ -376,16 +469,58 @@ export default function App() {
             onSelect={(id) => {
               const p = resolvePortfolio(id);
               if (!p) return;
+              handlePortfolioSelected(p);
+            }}
+          />
+        )}
 
-              if (mode === 'compare') {
-                setComparePortfolios((prev) => [...prev, p]);
-                setCompareStep((s) => s + 1);
-                setView('compare_select');
+        {view === 'etf_class' && (
+          <ETFClassView
+            assetClasses={etfAssetClasses}
+            etfs={etfsWithProxy}
+            onSelect={(cls) => { setSelectedEtfClass(cls); setView('etf_select'); }}
+          />
+        )}
+
+        {view === 'etf_select' && (
+          <ETFSelectView
+            etfs={etfsWithProxy.filter((e) => e.assetClass === selectedEtfClass)}
+            onSelect={(entry) => {
+              if (isCustomMode) {
+                setPendingEtf(entry);
+                setWeightInput('');
+                setView('custom_weight');
               } else {
-                setPortfolio(p);
-                setParamStep(0);
-                setView('params');
+                handlePortfolioSelected(etfToPortfolio(entry));
               }
+            }}
+          />
+        )}
+
+        {view === 'custom_build' && (
+          <CustomBuildView
+            holdings={customHoldings}
+            onAdd={() => setView('etf_class')}
+            onRemove={(i) => setCustomHoldings((prev) => prev.filter((_, idx) => idx !== i))}
+            onDone={() => {
+              if (customHoldings.length === 0) return;
+              handlePortfolioSelected(customToPortfolio(customHoldings));
+            }}
+          />
+        )}
+
+        {view === 'custom_weight' && pendingEtf && (
+          <CustomWeightView
+            etf={pendingEtf}
+            weightInput={weightInput}
+            onWeightChange={setWeightInput}
+            onSubmit={(w) => {
+              const weight = parseFloat(w) / 100;
+              if (isNaN(weight) || weight <= 0 || weight > 1) return;
+              setCustomHoldings((prev) => [...prev, etfToHolding(pendingEtf!, weight)]);
+              setPendingEtf(null);
+              setWeightInput('');
+              setView('custom_build');
             }}
           />
         )}
@@ -434,7 +569,7 @@ export default function App() {
         {view === 'compare_select' && (
           <CompareSelectView
             selected={comparePortfolios}
-            onAddMore={() => setView('category')}
+            onAddMore={() => setView('add_type')}
             onRun={() => {
               setParamStep(0);
               setView('params');
@@ -468,7 +603,7 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
   if (view === 'swr_results' || view === 'compare_results') {
     return <Text dimColor>←→: tab   Esc: back   q: quit</Text>;
   }
-  if (['category', 'portfolio', 'compare_select'].includes(view)) {
+  if (['category', 'portfolio', 'compare_select', 'add_type', 'etf_class', 'etf_select', 'custom_build'].includes(view)) {
     return <Text dimColor>↑↓: navigate   Enter: select   Esc: back   q: quit</Text>;
   }
   return <Text dimColor>Enter: confirm   Esc: back   q: quit</Text>;
@@ -534,6 +669,163 @@ function PortfolioView({ metadata, onSelect }: {
           limit={15}
         />
       </Box>
+    </Box>
+  );
+}
+
+// ─── Params View ─────────────────────────────────────────────────────────────
+
+// ─── Add Type View ──────────────────────────────────────────────────────────
+
+function AddTypeView({ onSelect }: { onSelect: (type: 'template' | 'single_etf' | 'custom') => void }) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Select Portfolio Type</Text>
+      <Box marginTop={1}>
+        <SelectInput
+          items={[
+            { label: 'Template portfolio (e.g., All Weather, Golden Butterfly)', value: 'template' as const },
+            { label: 'Single ETF (e.g., SPY, QQQ, VTI)', value: 'single_etf' as const },
+            { label: 'Custom portfolio (pick ETFs & weights)', value: 'custom' as const },
+          ]}
+          onSelect={(item) => onSelect(item.value)}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+// ─── ETF Class View ─────────────────────────────────────────────────────────
+
+const ETF_CLASS_LABELS: Record<string, string> = {
+  us_large_cap: 'US Large Cap',
+  us_small_cap: 'US Small/Mid Cap',
+  us_total_market: 'US Total Market',
+  intl_developed: 'Intl Developed',
+  intl_emerging: 'Intl Emerging',
+  us_agg_bond: 'US Aggregate Bond',
+  us_treasury_long: 'US Treasury Long',
+  us_treasury_intermediate: 'US Treasury Intermediate',
+  us_treasury_short: 'US Treasury Short',
+  global_agg_bond: 'Global Bond',
+  us_tips: 'US TIPS',
+  us_reit: 'US REIT',
+  us_cash: 'US Cash/Short-term',
+  gold: 'Gold',
+  commodities: 'Commodities',
+};
+
+function ETFClassView({ assetClasses, etfs, onSelect }: {
+  assetClasses: string[];
+  etfs: EtfMapEntry[];
+  onSelect: (cls: string) => void;
+}) {
+  const items = assetClasses.map((c) => ({
+    label: `${ETF_CLASS_LABELS[c] ?? c} (${etfs.filter((e) => e.assetClass === c).length})`,
+    value: c,
+  }));
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Select Asset Class</Text>
+      <Box marginTop={1}>
+        <SelectInput items={items} onSelect={(item) => onSelect(item.value)} limit={15} />
+      </Box>
+    </Box>
+  );
+}
+
+// ─── ETF Select View ────────────────────────────────────────────────────────
+
+function ETFSelectView({ etfs, onSelect }: {
+  etfs: EtfMapEntry[];
+  onSelect: (entry: EtfMapEntry) => void;
+}) {
+  const items = etfs.map((e) => ({
+    label: `${e.symbol.padEnd(6)} ${e.name}`,
+    value: e.symbol,
+  }));
+  const bySymbol = new Map(etfs.map((e) => [e.symbol, e]));
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Select ETF</Text>
+      <Box marginTop={1}>
+        <SelectInput
+          items={items}
+          onSelect={(item) => {
+            const entry = bySymbol.get(item.value);
+            if (entry) onSelect(entry);
+          }}
+          limit={15}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+// ─── Custom Build View ──────────────────────────────────────────────────────
+
+function CustomBuildView({ holdings, onAdd, onRemove, onDone }: {
+  holdings: PortfolioHolding[];
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  onDone: () => void;
+}) {
+  const totalWeight = holdings.reduce((s, h) => s + h.targetWeight, 0);
+
+  const items: { label: string; value: string }[] = [
+    { label: '+ Add ETF', value: 'add' },
+  ];
+  holdings.forEach((h, i) => {
+    items.push({ label: `✕ Remove ${h.asset.symbol} (${(h.targetWeight * 100).toFixed(1)}%)`, value: `remove_${i}` });
+  });
+  if (holdings.length > 0) {
+    items.push({ label: `▶ Done — use this portfolio (${(totalWeight * 100).toFixed(1)}% total)`, value: 'done' });
+  }
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Build Custom Portfolio</Text>
+      {holdings.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          {holdings.map((h, i) => (
+            <Text key={h.asset.symbol + i}>
+              {' '}{h.asset.symbol.padEnd(6)} <Text color="cyan">{(h.targetWeight * 100).toFixed(1).padStart(5)}%</Text> {h.asset.name}
+            </Text>
+          ))}
+          <Text dimColor>  Total: {(totalWeight * 100).toFixed(1)}%{Math.abs(totalWeight - 1) > 0.001 ? ' (weights should sum to 100%)' : ''}</Text>
+        </Box>
+      )}
+      <Box marginTop={1}>
+        <SelectInput
+          items={items}
+          onSelect={(item) => {
+            if (item.value === 'add') onAdd();
+            else if (item.value === 'done') onDone();
+            else if (item.value.startsWith('remove_')) onRemove(parseInt(item.value.slice(7)));
+          }}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+// ─── Custom Weight View ─────────────────────────────────────────────────────
+
+function CustomWeightView({ etf, weightInput, onWeightChange, onSubmit }: {
+  etf: EtfMapEntry;
+  weightInput: string;
+  onWeightChange: (v: string) => void;
+  onSubmit: (v: string) => void;
+}) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold>Set Weight for {etf.symbol}</Text>
+      <Text dimColor>{etf.name}</Text>
+      <Box marginTop={1}>
+        <Text>▸ Weight (%): </Text>
+        <TextInput value={weightInput} onChange={onWeightChange} onSubmit={onSubmit} />
+      </Box>
+      <Text dimColor>  Enter a number between 1-100, press Enter to confirm</Text>
     </Box>
   );
 }
