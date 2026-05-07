@@ -28,9 +28,7 @@ type AppMode = 'backtest' | 'compare' | 'swr';
 type View =
   | 'mode'
   | 'add_type'
-  | 'category'
   | 'portfolio'
-  | 'etf_class'
   | 'etf_select'
   | 'custom_build'
   | 'custom_weight'
@@ -100,7 +98,6 @@ export default function App() {
 
   const [mode, setMode] = useState<AppMode>('backtest');
   const [view, setView] = useState<View>('mode');
-  const [category, setCategory] = useState('');
   const [portfolio, setPortfolio] = useState<PortfolioDefinition | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [tab, setTab] = useState<ResultTab>('metrics');
@@ -119,7 +116,6 @@ export default function App() {
 
   // Custom portfolio state
   const [customHoldings, setCustomHoldings] = useState<PortfolioHolding[]>([]);
-  const [selectedEtfClass, setSelectedEtfClass] = useState('');
   const [pendingEtf, setPendingEtf] = useState<EtfMapEntry | null>(null);
   const [weightInput, setWeightInput] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -143,19 +139,10 @@ export default function App() {
     () => etfMap.filter((e) => e.proxySymbol),
     [etfMap],
   );
-  const etfAssetClasses = useMemo(
-    () => [...new Set(etfsWithProxy.map((e) => e.assetClass))],
-    [etfsWithProxy],
-  );
   const metadata = useMemo(
     () => getTemplateMetadata().filter((t) => t.holdingCount > 0),
     [],
   );
-  const categories = useMemo(
-    () => [...new Set(metadata.map((t) => t.category))],
-    [metadata],
-  );
-
   const resolvePortfolio = (id: string): PortfolioDefinition | undefined => {
     const etfBySymbol = new Map<string, EtfMapEntry>(etfMap.map((e) => [e.symbol, e]));
     const all = getPortfolioTemplates((symbol) => {
@@ -390,13 +377,6 @@ export default function App() {
         if (mode === 'compare') setView('compare_select');
         else setView('mode');
       }
-      if (view === 'category' && key.escape) {
-        setView('add_type');
-      }
-      if (view === 'etf_class' && key.escape) {
-        if (isCustomMode) setView('custom_build');
-        else setView('add_type');
-      }
       if (view === 'custom_build' && key.escape) {
         setView('add_type');
       }
@@ -447,10 +427,10 @@ export default function App() {
           <AddTypeView onSelect={(type) => {
             if (type === 'template') {
               setIsCustomMode(false);
-              setView('category');
+              setView('portfolio');
             } else if (type === 'single_etf') {
               setIsCustomMode(false);
-              setView('etf_class');
+              setView('etf_select');
             } else if (type === 'custom') {
               setIsCustomMode(true);
               setCustomHoldings([]);
@@ -459,33 +439,21 @@ export default function App() {
           }} />
         )}
 
-        {view === 'category' && (
-          <CategoryView categories={categories} metadata={metadata} onSelect={(c) => { setCategory(c); setView('portfolio'); }} />
-        )}
-
         {view === 'portfolio' && (
           <PortfolioView
-            metadata={metadata.filter((t) => t.category === category)}
+            metadata={metadata}
             onSelect={(id) => {
               const p = resolvePortfolio(id);
               if (!p) return;
               handlePortfolioSelected(p);
             }}
-            onBack={() => setView('category')}
-          />
-        )}
-
-        {view === 'etf_class' && (
-          <ETFClassView
-            assetClasses={etfAssetClasses}
-            etfs={etfsWithProxy}
-            onSelect={(cls) => { setSelectedEtfClass(cls); setView('etf_select'); }}
+            onBack={() => setView('add_type')}
           />
         )}
 
         {view === 'etf_select' && (
           <ETFSelectView
-            etfs={etfsWithProxy.filter((e) => e.assetClass === selectedEtfClass)}
+            etfs={etfsWithProxy}
             onSelect={(entry) => {
               if (isCustomMode) {
                 setPendingEtf(entry);
@@ -495,14 +463,14 @@ export default function App() {
                 handlePortfolioSelected(etfToPortfolio(entry));
               }
             }}
-            onBack={() => setView('etf_class')}
+            onBack={() => isCustomMode ? setView('custom_build') : setView('add_type')}
           />
         )}
 
         {view === 'custom_build' && (
           <CustomBuildView
             holdings={customHoldings}
-            onAdd={() => setView('etf_class')}
+            onAdd={() => setView('etf_select')}
             onRemove={(i) => setCustomHoldings((prev) => prev.filter((_, idx) => idx !== i))}
             onDone={() => {
               if (customHoldings.length === 0) return;
@@ -608,7 +576,7 @@ function StatusBar({ view, tab }: { view: View; tab: ResultTab }) {
   if (view === 'swr_results' || view === 'compare_results') {
     return <Text dimColor>←→: tab   Esc: back   q: quit</Text>;
   }
-  if (['category', 'portfolio', 'compare_select', 'add_type', 'etf_class', 'etf_select', 'custom_build'].includes(view)) {
+  if (['portfolio', 'compare_select', 'add_type', 'etf_select', 'custom_build'].includes(view)) {
     return <Text dimColor>↑↓: navigate   Enter: select   Esc: back   q: quit</Text>;
   }
   return <Text dimColor>Enter: confirm   Esc: back   q: quit</Text>;
@@ -636,29 +604,10 @@ function ModeView({ onSelect }: { onSelect: (m: AppMode) => void }) {
 
 // ─── Category View ───────────────────────────────────────────────────────────
 
-function CategoryView({ categories, metadata, onSelect }: {
-  categories: string[];
-  metadata: { category: string }[];
-  onSelect: (c: string) => void;
-}) {
-  const items = categories.map((c) => ({
-    label: `${c} (${metadata.filter((t) => t.category === c).length})`,
-    value: c,
-  }));
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text bold>Select Category</Text>
-      <Box marginTop={1}>
-        <SelectInput items={items} onSelect={(item) => onSelect(item.value)} />
-      </Box>
-    </Box>
-  );
-}
-
 // ─── Portfolio View ──────────────────────────────────────────────────────────
 
 function PortfolioView({ metadata, onSelect, onBack }: {
-  metadata: { id: string; name: string; nameZh: string; holdingCount: number; riskLevel: string }[];
+  metadata: { id: string; name: string; nameZh: string; holdingCount: number; riskLevel: string; category: string }[];
   onSelect: (id: string) => void;
   onBack: () => void;
 }) {
@@ -666,7 +615,8 @@ function PortfolioView({ metadata, onSelect, onBack }: {
   const q = query.toLowerCase();
   const filtered = q
     ? metadata.filter((t) =>
-        t.name.toLowerCase().includes(q) || t.nameZh?.toLowerCase().includes(q) || t.id.toLowerCase().includes(q))
+        t.name.toLowerCase().includes(q) || t.nameZh?.toLowerCase().includes(q)
+        || t.id.toLowerCase().includes(q) || t.category.toLowerCase().includes(q))
     : metadata;
 
   useInput((_input, key) => {
@@ -677,18 +627,18 @@ function PortfolioView({ metadata, onSelect, onBack }: {
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select Portfolio</Text>
       <Box marginTop={1}>
-        <Text>Search: </Text>
-        <TextInput value={query} onChange={setQuery} placeholder="type to filter..." />
+        <Text>🔍 </Text>
+        <TextInput value={query} onChange={setQuery} placeholder="search by name, category..." />
       </Box>
       <Box marginTop={1}>
         {filtered.length > 0 ? (
           <SelectInput
             items={filtered.map((t) => ({
-              label: t.nameZh ? `${t.name} (${t.nameZh})` : t.name,
+              label: `[${t.category}] ${t.nameZh ? `${t.name} (${t.nameZh})` : t.name}`,
               value: t.id,
             }))}
             onSelect={(item) => onSelect(item.value)}
-            limit={12}
+            limit={15}
           />
         ) : (
           <Text dimColor>No matching portfolios</Text>
@@ -740,25 +690,6 @@ const ETF_CLASS_LABELS: Record<string, string> = {
   commodities: 'Commodities',
 };
 
-function ETFClassView({ assetClasses, etfs, onSelect }: {
-  assetClasses: string[];
-  etfs: EtfMapEntry[];
-  onSelect: (cls: string) => void;
-}) {
-  const items = assetClasses.map((c) => ({
-    label: `${ETF_CLASS_LABELS[c] ?? c} (${etfs.filter((e) => e.assetClass === c).length})`,
-    value: c,
-  }));
-  return (
-    <Box flexDirection="column" marginTop={1}>
-      <Text bold>Select Asset Class</Text>
-      <Box marginTop={1}>
-        <SelectInput items={items} onSelect={(item) => onSelect(item.value)} limit={15} />
-      </Box>
-    </Box>
-  );
-}
-
 // ─── ETF Select View ────────────────────────────────────────────────────────
 
 function ETFSelectView({ etfs, onSelect, onBack }: {
@@ -770,7 +701,8 @@ function ETFSelectView({ etfs, onSelect, onBack }: {
   const q = query.toLowerCase();
   const filtered = q
     ? etfs.filter((e) =>
-        e.symbol.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.nameZh?.toLowerCase().includes(q))
+        e.symbol.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
+        || e.nameZh?.toLowerCase().includes(q) || (ETF_CLASS_LABELS[e.assetClass] ?? e.assetClass).toLowerCase().includes(q))
     : etfs;
   const bySymbol = new Map(etfs.map((e) => [e.symbol, e]));
 
@@ -782,21 +714,21 @@ function ETFSelectView({ etfs, onSelect, onBack }: {
     <Box flexDirection="column" marginTop={1}>
       <Text bold>Select ETF</Text>
       <Box marginTop={1}>
-        <Text>Search: </Text>
-        <TextInput value={query} onChange={setQuery} placeholder="symbol or name..." />
+        <Text>🔍 </Text>
+        <TextInput value={query} onChange={setQuery} placeholder="symbol, name, or asset class..." />
       </Box>
       <Box marginTop={1}>
         {filtered.length > 0 ? (
           <SelectInput
             items={filtered.map((e) => ({
-              label: `${e.symbol.padEnd(6)} ${e.name}`,
+              label: `${e.symbol.padEnd(6)} [${ETF_CLASS_LABELS[e.assetClass] ?? e.assetClass}] ${e.name}`,
               value: e.symbol,
             }))}
             onSelect={(item) => {
               const entry = bySymbol.get(item.value);
               if (entry) onSelect(entry);
             }}
-            limit={12}
+            limit={15}
           />
         ) : (
           <Text dimColor>No matching ETFs</Text>
