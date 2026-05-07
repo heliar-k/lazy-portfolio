@@ -27,8 +27,9 @@ interface KenFrenchSource {
   zipUrl: string;
   csvFilename: string;    // filename inside the ZIP
   outputFilename: string;  // output CSV filename
-  rfColumn: number;        // 0-based column index for RF
-  mktRfColumn: number;     // 0-based column index for Mkt-RF
+  rfColumn?: number;        // 0-based column index for RF (factor sources)
+  mktRfColumn?: number;     // 0-based column index for Mkt-RF (factor sources)
+  returnColumn?: number;    // 0-based column index for direct portfolio return (portfolio sources)
   startBase: number;       // base index value
 }
 
@@ -49,6 +50,14 @@ const SOURCES: KenFrenchSource[] = [
     outputFilename: 'msci_em_tr.csv',
     rfColumn: 6,
     mktRfColumn: 1,
+    startBase: 100,
+  },
+  {
+    name: 'US Small Cap Value',
+    zipUrl: 'https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/6_Portfolios_2x3_CSV.zip',
+    csvFilename: '6_Portfolios_2x3.csv',
+    outputFilename: 'smallcap_value_tr.csv',
+    returnColumn: 3,  // Small Value (Small HiBM)
     startBase: 100,
   },
 ];
@@ -73,8 +82,11 @@ function parseKenFrenchCSV(text: string, rfCol: number, mktRfCol: number): Month
     // Header line
     if (trimmed.startsWith(',')) continue;
 
-    // Stop at annual summary section
-    if (/^Annual/i.test(trimmed)) break;
+    // Stop at annual summary section (only after we've found data rows)
+    if (/^Annual/i.test(trimmed) && results.length > 0) break;
+
+    // Stop when we hit a new section header (e.g. equal-weighted section)
+    if (results.length > 0 && /Returns -- Monthly/i.test(trimmed)) break;
 
     // First column should be a 6-digit YYYYMM
     const firstCol = trimmed.split(/[\t,]+/)[0].trim();
@@ -97,6 +109,55 @@ function parseKenFrenchCSV(text: string, rfCol: number, mktRfCol: number): Month
     // Convert YYYYMM to YYYY-MM-DD (last day of month)
     const year = parseInt(dateStr.substring(0, 4));
     const month = parseInt(dateStr.substring(4, 6));
+    const lastDay = new Date(year, month, 0).getDate();
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    results.push({ date, totalReturn });
+  }
+
+  return results;
+}
+
+/**
+ * Parse Ken French portfolio return CSV (returns are directly in percent).
+ * Used for datasets like 6 Portfolios Formed on Size and Book-to-Market.
+ */
+function parseKenFrenchPortfolioCSV(text: string, returnCol: number): MonthlyData[] {
+  const lines = text.split(/\r?\n/);
+  const results: MonthlyData[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+
+    // Header line
+    if (trimmed.startsWith(',')) continue;
+
+    // Stop at annual summary section (only after we've found data rows)
+    if (/^Annual/i.test(trimmed) && results.length > 0) break;
+
+    // Stop when we hit a new section header (e.g. equal-weighted section)
+    if (results.length > 0 && /Returns -- Monthly/i.test(trimmed)) break;
+
+    // First column should be a 6-digit YYYYMM
+    const firstCol = trimmed.split(/[\t,]+/)[0].trim();
+    if (!/^\d{6}$/.test(firstCol)) continue;
+
+    // Parse tab-separated values
+    const cols = trimmed.split(/[\t,]+/).map(c => c.trim());
+    if (cols.length <= returnCol) continue;
+
+    const ret = parseFloat(cols[returnCol]);
+
+    // Sentinel -99.99 or -999 means missing
+    if (ret === -99.99 || ret === -999 || isNaN(ret)) continue;
+
+    // Return is in percent → decimal
+    const totalReturn = ret / 100;
+
+    // Convert YYYYMM to YYYY-MM-DD (last day of month)
+    const year = parseInt(firstCol.substring(0, 4));
+    const month = parseInt(firstCol.substring(4, 6));
     const lastDay = new Date(year, month, 0).getDate();
     const date = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
@@ -204,7 +265,9 @@ async function main() {
     }
 
     // Parse
-    const monthlyData = parseKenFrenchCSV(csvText, source.rfColumn, source.mktRfColumn);
+    const monthlyData = source.returnColumn !== undefined
+      ? parseKenFrenchPortfolioCSV(csvText, source.returnColumn)
+      : parseKenFrenchCSV(csvText, source.rfColumn!, source.mktRfColumn!);
     console.log(`  Parsed ${monthlyData.length} monthly data points`);
 
     if (monthlyData.length === 0) {

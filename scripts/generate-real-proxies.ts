@@ -1007,6 +1007,13 @@ function updateEtfMappings(): void {
     'EDV': 'US_LONG_TR',
     'IEI': 'US_10Y_TR',
     'IAU': 'GOLD_SPOT',
+    'IJS': 'SMALLCAP_VALUE_TR',
+    'IJR': 'SMALLCAP_VALUE_TR',
+    'IJT': 'SMALLCAP_VALUE_TR',
+    'VOE': 'SMALLCAP_VALUE_TR',
+    'VO': 'SMALLCAP_VALUE_TR',
+    'DES': 'SMALLCAP_VALUE_TR',
+    'SAA': 'SMALLCAP_VALUE_TR',
   };
 
   for (const entry of etfMap) {

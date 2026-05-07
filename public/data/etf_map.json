@@ -81,7 +81,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0007,
     "inceptionDate": "2006-08-24",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "VO",
@@ -93,7 +93,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0004,
     "inceptionDate": "2004-01-26",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "IJS",
@@ -105,7 +105,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0018,
     "inceptionDate": "2000-07-24",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "IJR",
@@ -117,7 +117,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0006,
     "inceptionDate": "2000-05-22",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "IJT",
@@ -129,7 +129,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0018,
     "inceptionDate": "2000-07-24",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "VIG",
@@ -309,7 +309,7 @@
     "provider": "WisdomTree",
     "expenseRatio": 0.0038,
     "inceptionDate": "2006-06-16",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "DIG",
@@ -1041,7 +1041,7 @@
     "provider": "ProShares",
     "expenseRatio": 0.0095,
     "inceptionDate": "2007-01-23",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "SMALLCAP_VALUE_TR"
   },
   {
     "symbol": "UBT",
