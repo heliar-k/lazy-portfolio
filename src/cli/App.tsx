@@ -1151,18 +1151,37 @@ function CompareResultsView({ results, tab, currency, height }: {
 
       {tab === 'chart' && (
         <Box flexDirection="column">
-          {results.map((r) => {
-            const values = r.result.timeSeries.map((p) => p.portfolioValue);
-            const sampled = downsample(values, Math.min((process.stdout.columns || 80) - 15, 100));
-            const formatVal = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v.toFixed(0)).padStart(7);
-            const chartH = Math.max(Math.floor((height - 6) / results.length) - 2, 5);
+          {(() => {
+            const width = Math.min((process.stdout.columns || 80) - 15, 100);
+            const chartH = Math.max(height - 8, 8);
+            const colors = [asciichart.cyan, asciichart.yellow, asciichart.green, asciichart.magenta];
+            const series = results.map((r) => {
+              const values = r.result.timeSeries.map((p) => p.portfolioValue);
+              return downsample(values, width);
+            });
+            const formatVal = (v: number) => {
+              if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+              if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+              return v.toFixed(0);
+            };
+            const chart = asciichart.plot(series, {
+              height: chartH,
+              colors: colors.slice(0, results.length),
+              format: (v: number) => formatVal(v).padStart(8),
+            });
             return (
-              <Box key={r.name} flexDirection="column" marginBottom={1}>
-                <Text bold color="cyan">{r.name}</Text>
-                <Text>{asciichart.plot(sampled, { height: chartH, format: formatVal })}</Text>
-              </Box>
+              <>
+                <Box gap={2} marginBottom={1}>
+                  {results.map((r, i) => (
+                    <Text key={r.name} color={['cyan', 'yellow', 'green', 'magenta'][i] as any}>
+                      ■ {truncate(r.name, 30)}
+                    </Text>
+                  ))}
+                </Box>
+                <Text>{chart}</Text>
+              </>
             );
-          })}
+          })()}
         </Box>
       )}
     </Box>
