@@ -90,14 +90,14 @@ describe('runBacktest', () => {
     // Verify time series
     expect(result.timeSeries).toHaveLength(13); // Jan-Dec = 12 months + month 0
 
-    // Month 0: $10,000
-    expect(result.timeSeries[0].portfolioValue).toBe(10000);
+    // Month 0: $10,000 less month-0 fees (0.03% ER / 12 × $10,000 = $0.25)
+    expect(result.timeSeries[0].portfolioValue).toBeCloseTo(9999.75, 0);
 
     // Monthly portfolio return = 0.6*0.01 + 0.4*0 = 0.006
     // After 12 months with expense ratio fees (0.03% per asset)
-    expect(result.metrics.finalCapital).toBeCloseTo(10741.02, 0);
+    expect(result.metrics.finalCapital).toBeCloseTo(10740.75, 0);
 
-    expect(result.metrics.cagr).toBeCloseTo(0.074102, 3);
+    expect(result.metrics.cagr).toBeCloseTo(0.074075, 3);
 
     // Total return
     expect(result.metrics.totalReturn).toBeCloseTo(0.074102, 3);

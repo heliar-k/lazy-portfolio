@@ -29,9 +29,12 @@ export function computeEffectiveWeights(
     weights[0][a] = targetWeights[a];
   }
 
-  // Track actual values (not just weights) for drift simulation
-  // Start with a normalized portfolio value of 1.0
-  const assetValues = targetWeights.slice(); // initial values = target weights
+  // Track actual values (not just weights) for drift simulation.
+  // Start with a normalized portfolio value of 1.0, then apply month-0
+  // returns so that weights for month 1 reflect month-0 drift.
+  const assetValues = targetWeights.map(
+    (w, a) => w * (1 + (monthlyReturns[a]?.[0] ?? 0)),
+  );
 
   for (let m = 1; m < nMonths; m++) {
     const shouldRebalance = checkRebalanceTrigger(
@@ -43,25 +46,28 @@ export function computeEffectiveWeights(
     );
 
     if (shouldRebalance) {
-      // Reset to target weights
+      // Reset to target weights, then apply this month's returns
+      // so the next month's start-of-month weights include this month's drift.
       const totalValue = assetValues.reduce((a, b) => a + b, 0);
       for (let a = 0; a < nAssets; a++) {
         assetValues[a] = totalValue * targetWeights[a];
         weights[m][a] = targetWeights[a];
       }
-    } else {
-      // Apply monthly returns to drift
-      let totalValue = 0;
-      const newValues: number[] = [];
       for (let a = 0; a < nAssets; a++) {
         const ret = monthlyReturns[a]?.[m] ?? 0;
-        const newVal = assetValues[a] * (1 + ret);
-        newValues.push(newVal);
-        totalValue += newVal;
+        assetValues[a] *= 1 + ret;
+      }
+    } else {
+      // Compute start-of-month weights from current asset values,
+      // then apply this month's returns to drift for next month.
+      const totalValue = assetValues.reduce((a, b) => a + b, 0);
+      for (let a = 0; a < nAssets; a++) {
+        weights[m][a] =
+          totalValue > 0 ? assetValues[a] / totalValue : targetWeights[a];
       }
       for (let a = 0; a < nAssets; a++) {
-        assetValues[a] = newValues[a];
-        weights[m][a] = totalValue > 0 ? newValues[a] / totalValue : targetWeights[a];
+        const ret = monthlyReturns[a]?.[m] ?? 0;
+        assetValues[a] *= 1 + ret;
       }
     }
   }

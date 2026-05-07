@@ -69,9 +69,9 @@ describe('computeEffectiveWeights — calendar rebalancing', () => {
 
     // Month 0 (Jan): target
     expect(weights[0]).toEqual([0.5, 0.5]);
-    // Month 1 (Feb): drifted (no rebalance in Feb)
-    expect(weights[1][0]).toBeGreaterThan(0.5);
-    expect(weights[1][1]).toBeLessThan(0.5);
+    // Month 1 (Feb): start-of-month weights; Jan had no drift (null return)
+    expect(weights[1][0]).toBe(0.5);
+    expect(weights[1][1]).toBe(0.5);
     // Month 2 (Mar = Q1 end): rebalanced
     expect(weights[2][0]).toBeCloseTo(0.5);
     expect(weights[2][1]).toBeCloseTo(0.5);
@@ -128,8 +128,8 @@ describe('computeEffectiveWeights — tolerance-band rebalancing', () => {
 
     // Month 0: target
     expect(weights[0]).toEqual([0.6, 0.4]);
-    // Month 1: returns applied, weights drifted (check happens before month's returns)
-    expect(weights[1][0]).toBeGreaterThan(0.6);
+    // Month 1: start-of-month weights; month 0 had null return, so still target
+    expect(weights[1][0]).toBe(0.6);
     // Month 2: threshold triggered at start of month → rebalanced
     expect(weights[2][0]).toBeCloseTo(0.6);
     // Month 3: minor drift, within band → not rebalanced
@@ -153,8 +153,9 @@ describe('computeEffectiveWeights — tolerance-band rebalancing', () => {
       months,
     );
 
-    // Month 1 & 2: drift is small, within 5% band — weights drift, not reset
-    expect(weights[1][0]).toBeGreaterThan(0.6);
+    // Month 1: start-of-month weight (month 0 had null return, so still target)
+    // Month 2: drifted from month 1's return
+    expect(weights[1][0]).toBe(0.6);
     expect(weights[2][0]).toBeGreaterThan(weights[1][0]);
   });
 });

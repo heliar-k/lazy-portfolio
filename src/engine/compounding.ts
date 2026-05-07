@@ -25,13 +25,9 @@ export function compoundPortfolio(
   const cashflowImpacts: number[] = [];
   const totalFees: number[] = [];
 
-  // Month 0: start with initial capital + any cashflow on that date
-  const cf0 = cashflowSchedule.get(months[0]) ?? 0;
-  let capital = initialCapital + cf0;
-  values.push(capital);
-  cashflowImpacts.push(cf0);
+  let capital = initialCapital;
 
-  for (let m = 1; m < nMonths; m++) {
+  for (let m = 0; m < nMonths; m++) {
     // Deduct expense ratio fees (annual fee / 12)
     let monthlyFee = 0;
     if (expenseRatios && expenseRatios.length > 0) {
