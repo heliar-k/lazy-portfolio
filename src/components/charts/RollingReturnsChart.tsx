@@ -2,10 +2,12 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
+import { filterByDateRange } from '@/lib/filter-series';
 
 interface RollingReturnsChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
   status: 'idle' | 'running' | 'ready' | 'error';
+  brushWindow?: { start: string; end: string } | null;
 }
 
 function computeRollingReturns(
@@ -31,16 +33,19 @@ function computeRollingReturns(
   return result;
 }
 
-export function RollingReturnsChart({ timeSeries, status }: RollingReturnsChartProps) {
+export function RollingReturnsChart({ timeSeries, status, brushWindow }: RollingReturnsChartProps) {
   const { t } = useTranslation();
 
   const option = useMemo(() => {
-    if (!timeSeries || timeSeries.length < 36) return {};
+    const filtered = brushWindow
+      ? filterByDateRange(timeSeries ?? [], brushWindow.start, brushWindow.end)
+      : (timeSeries ?? []);
+    if (!filtered || filtered.length < 36) return {};
 
-    const dates = timeSeries.map((p) => p.date);
-    const rolling3Y = computeRollingReturns(timeSeries, 36);
-    const rolling5Y = computeRollingReturns(timeSeries, 60);
-    const rolling10Y = computeRollingReturns(timeSeries, 120);
+    const dates = filtered.map((p) => p.date);
+    const rolling3Y = computeRollingReturns(filtered, 36);
+    const rolling5Y = computeRollingReturns(filtered, 60);
+    const rolling10Y = computeRollingReturns(filtered, 120);
 
     const series: Record<string, unknown>[] = [
       {
@@ -61,7 +66,7 @@ export function RollingReturnsChart({ timeSeries, status }: RollingReturnsChartP
       },
     ];
 
-    if (timeSeries.length >= 120) {
+    if (filtered.length >= 120) {
       series.push({
         name: '10-Year Rolling',
         type: 'line',
@@ -111,7 +116,7 @@ export function RollingReturnsChart({ timeSeries, status }: RollingReturnsChartP
       },
       series,
     };
-  }, [timeSeries]);
+  }, [timeSeries, brushWindow]);
 
   if (status === 'idle') {
     return (
@@ -129,7 +134,11 @@ export function RollingReturnsChart({ timeSeries, status }: RollingReturnsChartP
     );
   }
 
-  if (!timeSeries || timeSeries.length < 36) {
+  const hasRolling = brushWindow
+    ? filterByDateRange(timeSeries ?? [], brushWindow.start, brushWindow.end).length >= 36
+    : (timeSeries ?? []).length >= 36;
+
+  if (!hasRolling) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
         <p>At least 3 years of data needed for rolling returns</p>

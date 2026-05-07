@@ -6,17 +6,29 @@ import type { BacktestResult } from '@/engine/types';
 interface AnnualReturnsChartProps {
   result: BacktestResult | null;
   status: 'idle' | 'running' | 'ready' | 'error';
+  brushWindow?: { start: string; end: string } | null;
 }
 
-export function AnnualReturnsChart({ result, status }: AnnualReturnsChartProps) {
+export function AnnualReturnsChart({ result, status, brushWindow }: AnnualReturnsChartProps) {
   const { t } = useTranslation();
 
   const option = useMemo(() => {
     if (!result || result.annualReturns.length === 0) return {};
 
-    const years = result.annualReturns.map((r) => String(r.year));
-    const returns = result.annualReturns.map((r) => r.return * 100);
-    const colors = result.annualReturns.map((r) =>
+    let returns = result.annualReturns;
+
+    // Filter by brushWindow
+    if (brushWindow) {
+      const startYear = parseInt(brushWindow.start.slice(0, 4));
+      const endYear = parseInt(brushWindow.end.slice(0, 4));
+      returns = returns.filter((r) => r.year >= startYear && r.year <= endYear);
+    }
+
+    if (returns.length === 0) return {};
+
+    const years = returns.map((r) => String(r.year));
+    const values = returns.map((r) => r.return * 100);
+    const colors = returns.map((r) =>
       r.return >= 0 ? '#22c55e' : '#ef4444',
     );
 
@@ -43,7 +55,7 @@ export function AnnualReturnsChart({ result, status }: AnnualReturnsChartProps) 
       series: [
         {
           type: 'bar',
-          data: returns.map((val, i) => ({
+          data: values.map((val, i) => ({
             value: val,
             itemStyle: { color: colors[i], borderRadius: [2, 2, 0, 0] },
           })),
@@ -53,7 +65,7 @@ export function AnnualReturnsChart({ result, status }: AnnualReturnsChartProps) 
         },
       ],
     };
-  }, [result]);
+  }, [result, brushWindow]);
 
   if (status === 'idle') {
     return (

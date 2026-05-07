@@ -7,6 +7,7 @@ interface EquityCurveChartProps {
   benchmarkTimeSeries?: MonthlyTimeSeriesPoint[];
   benchmarkName?: string;
   status: 'idle' | 'running' | 'ready' | 'error';
+  onBrush?: (start: string | null, end: string | null) => void;
 }
 
 export function EquityCurveChart({
@@ -14,7 +15,29 @@ export function EquityCurveChart({
   benchmarkTimeSeries,
   benchmarkName,
   status,
+  onBrush,
 }: EquityCurveChartProps) {
+  const onEvents = useMemo(() => {
+    if (!onBrush) return undefined;
+    return {
+      dataZoom: (params: { batch?: { start?: number; end?: number }[] }) => {
+        const batch = params?.batch ?? [params as { start?: number; end?: number }];
+        if (batch.length === 0) return;
+        const dz = batch[0];
+        if (dz?.start !== undefined && dz?.end !== undefined) {
+          const dates = timeSeries.map((p) => p.date);
+          const startIdx = Math.floor(dz.start / 100 * (dates.length - 1));
+          const endIdx = Math.ceil(dz.end / 100 * (dates.length - 1));
+          const isFullRange = startIdx === 0 && endIdx >= dates.length - 1;
+          onBrush(
+            isFullRange ? null : dates[startIdx] ?? null,
+            isFullRange ? null : dates[endIdx] ?? null,
+          );
+        }
+      },
+    };
+  }, [onBrush, timeSeries]);
+
   const option = useMemo(() => {
     if (!timeSeries || timeSeries.length === 0) return {};
 
@@ -180,7 +203,7 @@ export function EquityCurveChart({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <ReactECharts option={option} style={{ height: 400 }} notMerge />
+      <ReactECharts option={option} style={{ height: 400 }} notMerge onEvents={onEvents} />
     </div>
   );
 }

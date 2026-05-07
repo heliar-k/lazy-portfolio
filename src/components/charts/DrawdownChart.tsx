@@ -2,20 +2,25 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import type { MonthlyTimeSeriesPoint } from '@/engine/types';
+import { filterByDateRange } from '@/lib/filter-series';
 
 interface DrawdownChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
   status: 'idle' | 'running' | 'ready' | 'error';
+  brushWindow?: { start: string; end: string } | null;
 }
 
-export function DrawdownChart({ timeSeries, status }: DrawdownChartProps) {
+export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChartProps) {
   const { t } = useTranslation();
 
   const option = useMemo(() => {
-    if (!timeSeries || timeSeries.length === 0) return {};
+    const filtered = brushWindow
+      ? filterByDateRange(timeSeries ?? [], brushWindow.start, brushWindow.end)
+      : (timeSeries ?? []);
+    if (!filtered || filtered.length === 0) return {};
 
-    const dates = timeSeries.map((p) => p.date);
-    const drawdowns = timeSeries.map((p) => p.drawdown * 100);
+    const dates = filtered.map((p) => p.date);
+    const drawdowns = filtered.map((p) => p.drawdown * 100);
 
     // Find max drawdown period for marking
     let maxDD = 0;
@@ -24,8 +29,8 @@ export function DrawdownChart({ timeSeries, status }: DrawdownChartProps) {
     let peakIdx = 0;
     let peak = -Infinity;
 
-    for (let i = 0; i < timeSeries.length; i++) {
-      const val = timeSeries[i].portfolioValue;
+    for (let i = 0; i < filtered.length; i++) {
+      const val = filtered[i].portfolioValue;
       if (val > peak) {
         peak = val;
         peakIdx = i;
@@ -95,7 +100,7 @@ export function DrawdownChart({ timeSeries, status }: DrawdownChartProps) {
         },
       ],
     };
-  }, [timeSeries]);
+  }, [timeSeries, brushWindow]);
 
   if (status === 'idle') {
     return (

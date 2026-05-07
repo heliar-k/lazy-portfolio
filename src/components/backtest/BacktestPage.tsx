@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBacktestStore } from '@/stores/backtest-store';
 import { usePortfolioStore } from '@/stores/portfolio-store';
@@ -13,6 +13,8 @@ import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 
+type BrushWindow = { start: string; end: string } | null;
+
 export function BacktestPage() {
   const { t } = useTranslation();
   const { params, result, benchmarkId, benchmarkResult, status,
@@ -23,6 +25,15 @@ export function BacktestPage() {
   const { current: portfolio } = usePortfolioStore();
   const { result: hookResult, status: hookStatus, errorMessage: hookError,
     run, reset: _reset } = useBacktest();
+
+  const [brushWindow, setBrushWindow] = useState<BrushWindow>(null);
+
+  // Clear brush when new backtest starts
+  useEffect(() => {
+    if (hookStatus === 'running') {
+      setBrushWindow(null);
+    }
+  }, [hookStatus]);
 
   // Sync portfolio into backtest params
   useEffect(() => {
@@ -60,7 +71,6 @@ export function BacktestPage() {
           const benchResult = await runBenchmarkBacktest(backtestParams, benchmark);
           setBenchmarkResult(benchResult);
         } catch {
-          // Benchmark failure is non-blocking
           setBenchmarkResult(null);
         }
       }
@@ -73,6 +83,18 @@ export function BacktestPage() {
     setBenchmarkId(id);
     if (!id) setBenchmarkResult(null);
   }, [setBenchmarkId, setBenchmarkResult]);
+
+  const handleBrush = useCallback((start: string | null, end: string | null) => {
+    if (start && end) {
+      setBrushWindow({ start, end });
+    } else {
+      setBrushWindow(null);
+    }
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setBrushWindow(null);
+  }, []);
 
   const canRun = portfolio.holdings.length > 0;
 
@@ -109,6 +131,20 @@ export function BacktestPage() {
         />
       </div>
 
+      {brushWindow && (
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-xs text-gray-500">
+            Zoomed: {brushWindow.start} — {brushWindow.end}
+          </span>
+          <button
+            onClick={handleResetZoom}
+            className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          >
+            Reset zoom
+          </button>
+        </div>
+      )}
+
       <div className="mt-6 space-y-6">
         <ResultsDashboard
           metrics={result?.metrics ?? null}
@@ -122,18 +158,25 @@ export function BacktestPage() {
           benchmarkTimeSeries={benchmarkResult?.timeSeries ?? []}
           benchmarkName={benchmarkResult?.parameters.portfolio.name}
           status={status}
+          onBrush={handleBrush}
         />
 
         <DrawdownChart
           timeSeries={result?.timeSeries ?? []}
           status={status}
+          brushWindow={brushWindow}
         />
 
-        <AnnualReturnsChart result={result} status={status} />
+        <AnnualReturnsChart
+          result={result}
+          status={status}
+          brushWindow={brushWindow}
+        />
 
         <RollingReturnsChart
           timeSeries={result?.timeSeries ?? []}
           status={status}
+          brushWindow={brushWindow}
         />
       </div>
     </div>
