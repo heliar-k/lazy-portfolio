@@ -64,7 +64,6 @@ export function ParameterForm({
   const { t } = useTranslation();
 
   const rebalanceOptions: { value: string; label: string; strategy: RebalancingStrategy }[] = [
-    { value: 'none', label: t('rebalance.none'), strategy: { type: 'calendar', frequency: 'annual' } },
     { value: 'monthly', label: t('rebalance.monthly'), strategy: { type: 'calendar', frequency: 'monthly' } },
     { value: 'quarterly', label: t('rebalance.quarterly'), strategy: { type: 'calendar', frequency: 'quarterly' } },
     { value: 'annual', label: t('rebalance.annual'), strategy: { type: 'calendar', frequency: 'annual' } },
@@ -123,7 +122,7 @@ export function ParameterForm({
                 (rebalancing.type === 'calendar'
                   ? o.strategy.type === 'calendar' && (o.strategy as { frequency: string }).frequency === (rebalancing as { frequency: string }).frequency
                   : o.strategy.type === 'tolerance_band' && (o.strategy as { threshold: number }).threshold === (rebalancing as { threshold: number }).threshold)
-            )?.value || 'annual'}
+            )?.value ?? rebalanceOptions[2].value}
             onChange={(e) => {
               const opt = rebalanceOptions.find((o) => o.value === e.target.value);
               if (opt) onRebalancingChange(opt.strategy);

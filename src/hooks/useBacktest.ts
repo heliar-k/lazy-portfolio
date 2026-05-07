@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
+import { loadDataVersion } from '../data/loader';
 import { getCachedResult, setCachedResult } from '../lib/cache';
 import type { BacktestParameters, BacktestResult } from '../engine/types';
 
@@ -56,16 +57,21 @@ export function useBacktest(): UseBacktestReturn {
     setStatus('running');
     setErrorMessage(null);
 
-    // Check cache first
-    const cached = getCachedResult(params);
-    if (cached) {
-      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
-      setResult(cached);
-      setStatus('ready');
-      return;
-    }
-
     try {
+      // Load data version first — used as cache key component so stale results
+      // are automatically invalidated when CSV data files are updated.
+      const dataVersion = await loadDataVersion();
+      const dv = dataVersion.version;
+
+      // Check cache first
+      const cached = getCachedResult(params, dv);
+      if (cached) {
+        if (abortRef.current || currentRequestId !== requestIdRef.current) return;
+        setResult(cached);
+        setStatus('ready');
+        return;
+      }
+
       // 1. Resolve data (main thread — involves fetch)
       const assetReturns = await resolvePortfolioReturns(params.portfolio.holdings);
 
@@ -118,7 +124,7 @@ export function useBacktest(): UseBacktestReturn {
         if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
         setResult(result);
-        setCachedResult(params, result);
+        setCachedResult(params, result, dv);
         setStatus('ready');
       } else {
         // Fallback: run on main thread via dynamic import
@@ -134,7 +140,7 @@ export function useBacktest(): UseBacktestReturn {
         );
 
         setResult(backtestResult);
-        setCachedResult(params, backtestResult);
+        setCachedResult(params, backtestResult, dv);
         setStatus('ready');
       }
     } catch (err) {

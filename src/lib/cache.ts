@@ -1,6 +1,6 @@
 import type { BacktestParameters, BacktestResult } from '../engine/types';
 
-const CACHE_KEY_PREFIX = 'btcache_';
+const CACHE_KEY_PREFIX = 'btcache_v5_';
 const MAX_ENTRIES = 20;
 
 interface CacheEntry {
@@ -12,8 +12,10 @@ interface CacheEntry {
 
 /**
  * Generate a deterministic cache key from backtest parameters.
+ * dataVersion should be the version field from data_version.json — when it changes,
+ * all cached results are automatically invalidated.
  */
-export function generateCacheKey(params: BacktestParameters): string {
+export function generateCacheKey(params: BacktestParameters, dataVersion: number): string {
   const { portfolio, startDate, endDate, initialCapital, displayCurrency,
     inflationRegion, inflationAdjusted, rebalancing, cashflows } = params;
 
@@ -32,6 +34,7 @@ export function generateCacheKey(params: BacktestParameters): string {
     : `band:${rebalancing.threshold}`;
 
   return [
+    String(dataVersion),
     holdingsKey,
     startDate,
     endDate,
@@ -47,9 +50,9 @@ export function generateCacheKey(params: BacktestParameters): string {
 /**
  * Look up a cached backtest result.
  */
-export function getCachedResult(params: BacktestParameters): BacktestResult | null {
+export function getCachedResult(params: BacktestParameters, dataVersion: number): BacktestResult | null {
   try {
-    const key = generateCacheKey(params);
+    const key = generateCacheKey(params, dataVersion);
     const raw = localStorage.getItem(CACHE_KEY_PREFIX + key);
     if (!raw) return null;
     const entry: CacheEntry = JSON.parse(raw);
@@ -65,9 +68,9 @@ export function getCachedResult(params: BacktestParameters): BacktestResult | nu
 /**
  * Store a backtest result in the cache.
  */
-export function setCachedResult(params: BacktestParameters, result: BacktestResult): void {
+export function setCachedResult(params: BacktestParameters, result: BacktestResult, dataVersion: number): void {
   try {
-    const key = generateCacheKey(params);
+    const key = generateCacheKey(params, dataVersion);
     const entry: CacheEntry = {
       key,
       params,

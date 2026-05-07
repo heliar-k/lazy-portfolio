@@ -62,7 +62,8 @@ export async function loadProxySeries(proxySymbol: string): Promise<MonthlyPrice
   for (const dir of dirs) {
     const url = `${BASE}/proxies/${dir}/${key}.csv`;
     const res = await fetch(url);
-    if (res.ok) {
+    // Skip HTML responses — Vite dev server returns index.html (200) for missing files
+    if (res.ok && !res.headers.get('content-type')?.includes('text/html')) {
       csv = await res.text();
       break;
     }
