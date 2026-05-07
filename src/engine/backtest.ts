@@ -172,22 +172,18 @@ function buildTimeSeries(
     const portfolioValue = values[m] ?? 0;
     const cashflowImpact = cashflowImpacts[m] ?? 0;
 
-    // Monthly portfolio return (weighted sum of asset returns)
-    let monthlyReturn = 0;
-    if (m === 0) {
-      // First month: return from initialCapital to values[0]
-      monthlyReturn = initialCapital > 0 ? (portfolioValue - initialCapital) / initialCapital : 0;
-    } else {
-      let totalWeight = 0;
-      let weightedReturn = 0;
-      for (let a = 0; a < holdings.length; a++) {
-        const w = effectiveWeights[m]?.[a] ?? 0;
-        const r = alignedReturns[a]?.[m] ?? 0;
-        weightedReturn += w * r;
-        totalWeight += w;
-      }
-      monthlyReturn = totalWeight > 0 ? weightedReturn / totalWeight : 0;
+    // Monthly portfolio return: weighted average of asset returns (TWR).
+    // Using asset-level returns rather than portfolio value changes ensures
+    // cashflow deposits and withdrawals do not affect the return figure in any month.
+    let totalWeight = 0;
+    let weightedReturn = 0;
+    for (let a = 0; a < holdings.length; a++) {
+      const w = effectiveWeights[m]?.[a] ?? 0;
+      const r = alignedReturns[a]?.[m] ?? 0;
+      weightedReturn += w * r;
+      totalWeight += w;
     }
+    const monthlyReturn = totalWeight > 0 ? weightedReturn / totalWeight : 0;
 
     // Drawdown
     if (portfolioValue > peak) {

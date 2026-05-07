@@ -20,15 +20,12 @@ function computeRollingReturns(
     if (i < months) {
       result.push(null);
     } else {
-      const startVal = timeSeries[i - months].portfolioValue;
-      const endVal = timeSeries[i].portfolioValue;
-      if (startVal > 0) {
-        const years = months / 12;
-        const totalReturn = endVal / startVal;
-        result.push(Math.pow(totalReturn, 1 / years) - 1);
-      } else {
-        result.push(null);
-      }
+      // TWR: chain-multiply monthly returns over the window so cashflow
+      // deposits/withdrawals don't distort the rolling performance figure.
+      const window = timeSeries.slice(i - months + 1, i + 1);
+      const periodReturn = window.reduce((prod, p) => prod * (1 + p.monthlyReturn), 1) - 1;
+      const years = months / 12;
+      result.push(Math.pow(1 + periodReturn, 1 / years) - 1);
     }
   }
   return result;

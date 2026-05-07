@@ -5,7 +5,7 @@ import type { BacktestMetrics, MonthlyTimeSeriesPoint } from './types';
  */
 export function computeMetrics(
   timeSeries: MonthlyTimeSeriesPoint[],
-  initialCapital: number,
+  _initialCapital: number,
 ): BacktestMetrics {
   const n = timeSeries.length;
 
@@ -20,20 +20,16 @@ export function computeMetrics(
   const effectiveReturns = returns.filter((r) => !isNaN(r));
 
   const finalCapital = values[n - 1];
-  const totalReturn = initialCapital > 0
-    ? (finalCapital / initialCapital) - 1
-    : 0;
 
-  // CAGR — n months of growth from initialCapital to finalCapital
+  // Time-Weighted Return: chain-multiply monthly returns so cashflow deposits/withdrawals
+  // don't inflate or deflate the performance figure.
+  const twr = effectiveReturns.reduce((prod, r) => prod * (1 + r), 1) - 1;
+  const totalReturn = twr;
+
+  // CAGR from TWR — avoids the initialCapital vs finalCapital comparison which
+  // would be distorted by any deposits or withdrawals during the period.
   const years = n / 12;
-  let cagr = 0;
-  if (years > 0) {
-    const startVal = initialCapital > 0 ? initialCapital : 1;
-    const endVal = values[n - 1];
-    if (endVal > 0 && startVal > 0) {
-      cagr = Math.pow(endVal / startVal, 1 / years) - 1;
-    }
-  }
+  const cagr = years > 0 ? Math.pow(1 + twr, 1 / years) - 1 : 0;
 
   // Annualized std dev
   const stdDevAnnualized = computeAnnualizedStdDev(effectiveReturns);
@@ -252,29 +248,28 @@ function computeRollingReturns(
     return { three: empty, five: empty, ten: empty };
   }
 
-  const values = timeSeries.map((p) => p.portfolioValue);
+  const returns = timeSeries.map((p) => p.monthlyReturn);
 
-  const three = rollingWindow(values, 36);
-  const five = rollingWindow(values, 60);
-  const ten = rollingWindow(values, 120);
+  const three = rollingWindow(returns, 36);
+  const five = rollingWindow(returns, 60);
+  const ten = rollingWindow(returns, 120);
 
   return { three, five, ten };
 }
 
 function rollingWindow(
-  values: number[],
+  returns: number[],
   months: number,
 ): { best: number; worst: number } {
-  if (values.length < months + 1) return { best: 0, worst: 0 };
+  if (returns.length < months) return { best: 0, worst: 0 };
 
   let best = -Infinity;
   let worst = Infinity;
 
-  for (let i = months; i < values.length; i++) {
-    const startVal = values[i - months];
-    if (startVal <= 0) continue;
-    const cagr =
-      Math.pow(values[i] / startVal, 12 / months) - 1;
+  for (let i = months; i <= returns.length; i++) {
+    // Chain-multiply monthly returns over the window — TWR for this sub-period
+    const windowReturn = returns.slice(i - months, i).reduce((p, r) => p * (1 + r), 1) - 1;
+    const cagr = Math.pow(1 + windowReturn, 12 / months) - 1;
     if (cagr > best) best = cagr;
     if (cagr < worst) worst = cagr;
   }
