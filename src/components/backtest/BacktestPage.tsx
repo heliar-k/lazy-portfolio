@@ -43,6 +43,7 @@ function paramsSignature(
       ? `cal:${params.rebalancing.frequency}`
       : `band:${(params.rebalancing as { type: 'tolerance_band'; threshold: number }).threshold}`;
   const slots = compSlots.map((s) => s.id).join('+');
+  const cashflows = params.cashflows.map((c) => `${c.date}:${c.amount}:${c.recurring?.frequency ?? ''}`).join(';');
   return [
     holdings,
     params.startDate,
@@ -53,6 +54,7 @@ function paramsSignature(
     String(params.inflationAdjusted),
     rebal,
     slots,
+    cashflows,
   ].join('|');
 }
 

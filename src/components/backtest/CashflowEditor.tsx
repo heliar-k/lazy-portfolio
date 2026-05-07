@@ -21,6 +21,13 @@ const FREQS: { key: FreqType; labelKey: string }[] = [
   { key: 'annual', labelKey: 'cashflow.annual' },
 ];
 
+function toEndOfMonthDate(ym: string): string {
+  // ym is "YYYY-MM" from <input type="month">; convert to "YYYY-MM-DD"
+  const [y, m] = ym.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${ym}-${String(lastDay).padStart(2, '0')}`;
+}
+
 function parseRow(cashflows: CashflowEvent[], freq: FreqType): RowState {
   const match = cashflows.find((c) => c.recurring?.frequency === freq);
   if (!match) return { amount: '', type: 'deposit' };
@@ -52,7 +59,7 @@ export function CashflowEditor({ cashflows, startDate, onChange }: CashflowEdito
       const amt = parseFloat(row.amount);
       if (!isNaN(amt) && amt > 0) {
         events.push({
-          date: startDateRef.current,
+          date: toEndOfMonthDate(startDateRef.current),
           amount: row.type === 'withdrawal' ? -amt : amt,
           type: row.type,
           recurring: { frequency: freq },

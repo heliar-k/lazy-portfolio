@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PortfolioHolding } from '@/engine/types';
 
@@ -19,6 +20,8 @@ export function WeightEditor({
   onNameChange,
 }: WeightEditorProps) {
   const { t } = useTranslation();
+  // Local string state per symbol so user can type freely without store re-renders interfering
+  const [localInputs, setLocalInputs] = useState<Record<string, string>>({});
 
   const totalWeight = holdings.reduce((s, h) => s + h.targetWeight, 0);
   const totalPct = (totalWeight * 100).toFixed(1);
@@ -73,10 +76,21 @@ export function WeightEditor({
                     min="0"
                     max="100"
                     step="0.5"
-                    value={(h.targetWeight * 100).toFixed(1)}
+                    value={localInputs[h.asset.symbol] ?? (h.targetWeight * 100).toFixed(1)}
                     onChange={(e) => {
+                      setLocalInputs((prev) => ({ ...prev, [h.asset.symbol]: e.target.value }));
                       const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) onWeightChange(h.asset.symbol, v / 100);
+                      if (!isNaN(v) && v >= 0 && v <= 100) onWeightChange(h.asset.symbol, v / 100);
+                    }}
+                    onBlur={(e) => {
+                      // Commit final value and clear local override
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v) && v >= 0 && v <= 100) onWeightChange(h.asset.symbol, v / 100);
+                      setLocalInputs((prev) => {
+                        const next = { ...prev };
+                        delete next[h.asset.symbol];
+                        return next;
+                      });
                     }}
                     className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right
                       focus:outline-none focus:ring-2 focus:ring-blue-500"
