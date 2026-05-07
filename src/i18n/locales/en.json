@@ -43,8 +43,10 @@
     "exportCsv": "Export CSV",
     "resetZoom": "Reset zoom",
     "zoomed": "Zoomed",
-    "compareWith": "Compare with",
-    "addComparison": "Add portfolio…"
+    "compareWith": "Select Portfolios",
+    "addComparison": "Add portfolio…",
+    "selectedCount": "{{count}} selected",
+    "noPortfolioError": "Please add ETFs and set weights in the Builder page first"
   },
   "cashflow": {
     "title": "Cashflows",

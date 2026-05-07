@@ -43,8 +43,10 @@
     "exportCsv": "导出 CSV",
     "resetZoom": "重置缩放",
     "zoomed": "已缩放",
-    "compareWith": "添加对比组合",
-    "addComparison": "添加组合…"
+    "compareWith": "选择组合",
+    "addComparison": "添加对比组合…",
+    "selectedCount": "已选 {{count}} 个",
+    "noPortfolioError": "请先在构建器页面添加 ETF 并设置好权重"
   },
   "cashflow": {
     "title": "现金流",

@@ -142,6 +142,7 @@ export function BacktestPage() {
   const [lastRunSignature, setLastRunSignature] = useState<string | null>(null);
   const [compSlots, setCompSlots] = useState<CompSlot[]>([]);
   const [compResults, setCompResults] = useState<CompResult[]>([]);
+  const [runError, setRunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (hookStatus === 'running') setBrushWindow(null);
@@ -167,6 +168,11 @@ export function BacktestPage() {
   }, [compSlots]);
 
   const handleRunBacktest = useCallback(async () => {
+    if (portfolio.holdings.length === 0) {
+      setRunError(t('backtest.noPortfolioError'));
+      return;
+    }
+    setRunError(null);
     const backtestParams = { ...params, portfolio };
     setLastRunSignature(paramsSignature(params, portfolio, compSlots));
 
@@ -195,7 +201,7 @@ export function BacktestPage() {
       }
       setCompResults(results);
     }
-  }, [params, portfolio, compSlots, run, etfMap, templates, saved]);
+  }, [params, portfolio, compSlots, run, etfMap, templates, saved, t]);
 
   const handleBrush = useCallback((start: string | null, end: string | null) => {
     if (start && end) setBrushWindow({ start, end });
@@ -208,7 +214,7 @@ export function BacktestPage() {
     downloadCSV(csv, `backtest-${new Date().toISOString().slice(0, 10)}.csv`);
   }, [result]);
 
-  const canRun = portfolio.holdings.length > 0;
+  const canRun = true; // validation is done inside handleRunBacktest with error message
   const isRunning = status === 'running' || compResults.some((r) => r.status === 'running');
   const isStale =
     status === 'ready' &&
@@ -270,8 +276,19 @@ export function BacktestPage() {
       </div>
 
       <div className="mt-4">
-        <ComparisonPanel slots={compSlots} onChange={setCompSlots} />
+        <ComparisonPanel
+          primaryName={primaryName}
+          slots={compSlots}
+          onChange={setCompSlots}
+        />
       </div>
+
+      {runError && (
+        <div className="mt-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+          <span className="text-red-500 text-sm">✕</span>
+          <span className="text-sm text-red-700">{runError}</span>
+        </div>
+      )}
 
       {brushWindow && (
         <div className="mt-4 flex items-center gap-2">

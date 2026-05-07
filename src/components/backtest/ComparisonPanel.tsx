@@ -10,20 +10,23 @@ export interface CompSlot {
 }
 
 interface ComparisonPanelProps {
+  primaryName: string;
   slots: CompSlot[];
   onChange: (slots: CompSlot[]) => void;
 }
 
-const MAX_SLOTS = 3;
+const MAX_ADDITIONAL = 3;
 
-export function ComparisonPanel({ slots, onChange }: ComparisonPanelProps) {
+export function ComparisonPanel({ primaryName, slots, onChange }: ComparisonPanelProps) {
   const { t, i18n } = useTranslation();
-  const [expanded, setExpanded] = useState(slots.length > 0);
+  const [expanded, setExpanded] = useState(true);
   const { saved } = usePortfolioStore();
   const templates = useMemo(() => getTemplateMetadata(), []);
 
+  const totalSelected = 1 + slots.length; // primary always counts as 1
+
   const handleSelect = (val: string) => {
-    if (!val || slots.length >= MAX_SLOTS) return;
+    if (!val || slots.length >= MAX_ADDITIONAL) return;
     if (slots.some((s) => s.id === val)) return;
 
     let name = '';
@@ -58,36 +61,42 @@ export function ComparisonPanel({ slots, onChange }: ComparisonPanelProps) {
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        {t('backtest.compareWith')}
-        {slots.length > 0 && (
-          <span className="text-xs text-gray-400 font-normal">
-            ({slots.length} / {MAX_SLOTS})
-          </span>
-        )}
+        {t('backtest.selectPortfolios')}
+        <span className="ml-1 text-xs font-normal text-gray-400">
+          {t('backtest.selectedCount', { count: totalSelected })}
+        </span>
       </button>
 
       {expanded && (
         <div className="mt-3 space-y-2">
+          {/* Primary portfolio — always first, not removable */}
+          <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+            <span className="text-sm font-medium text-blue-800">{primaryName || t('builder.untitled')}</span>
+            <span className="text-xs text-blue-400">{t('compare.primary')}</span>
+          </div>
+
+          {/* Additional comparison slots */}
           {slots.map((slot) => (
             <div key={slot.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-700">{slot.name}</span>
               <button
                 onClick={() => handleRemove(slot.id)}
-                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-3"
               >
-                {t('common.cancel')}
+                ✕
               </button>
             </div>
           ))}
 
-          {slots.length < MAX_SLOTS && (
+          {/* Add more slot — hidden when at max */}
+          {slots.length < MAX_ADDITIONAL && (
             <select
               value=""
               onChange={(e) => handleSelect(e.target.value)}
               className="w-full px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm
                 text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
             >
-              <option value="">+ {t('backtest.addComparison')}</option>
+              <option value="">{t('backtest.addComparison')}</option>
               {saved.length > 0 && (
                 <optgroup label={t('compare.savedPortfolios')}>
                   {saved.map((p) => (
