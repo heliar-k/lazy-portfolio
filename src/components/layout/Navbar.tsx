@@ -40,6 +40,9 @@ export function Navbar() {
           <NavLink to="/market" className={linkClass}>
             {t('nav.market')}
           </NavLink>
+          <NavLink to="/withdrawal" className={linkClass}>
+            {t('nav.withdrawal')}
+          </NavLink>
         </div>
         <button
           onClick={toggleLang}

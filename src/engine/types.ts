@@ -212,3 +212,60 @@ export interface ValidationResult {
   errors: ValidationError[];
   warnings: ValidationError[];
 }
+
+// ---- Withdrawal Strategy Analysis ----
+
+export type WithdrawalStrategyType =
+  | 'fixed_percentage'       // 4% rule: initialCapital * rate, CPI-adjusted annually
+  | 'fixed_percentage_current'; // withdraw rate% of current portfolio value each year
+
+export interface WithdrawalStrategy {
+  type: WithdrawalStrategyType;
+  initialRate: number; // e.g., 0.04 = 4%
+}
+
+export interface WithdrawalSimulationParams {
+  portfolio: PortfolioDefinition;
+  strategy: WithdrawalStrategy;
+  retirementYears: number;
+  initialCapital: number;
+  inflationAdjusted: boolean;
+  rebalancing: RebalancingStrategy;
+  displayCurrency: DisplayCurrency;
+  inflationRegion: Region;
+}
+
+export interface SinglePeriodResult {
+  startDate: string;
+  endDate: string;
+  success: boolean;            // portfolio survived the full period
+  finalBalance: number;
+  finalBalanceReal: number;    // inflation-adjusted
+  minBalance: number;
+  maxWithdrawalAmount: number;
+  minWithdrawalAmount: number;
+  totalWithdrawals: number;
+  depletionDate: string | null; // first date portfolio hit ≤ 0
+  annualResults: {
+    year: number;
+    withdrawalAmount: number;
+    portfolioValue: number;
+    portfolioReturn: number;
+  }[];
+}
+
+export interface SWRResult {
+  params: WithdrawalSimulationParams;
+  successRate: number;         // fraction of periods that survived
+  safeWithdrawalRate: number;  // highest tested rate with 100% success
+  medianFinalBalance: number;
+  worstCaseFinalBalance: number;
+  periodResults: SinglePeriodResult[];
+  // Sweep: results for every (startYear, rate) combination
+  sweepResults: {
+    startDate: string;
+    rate: number;
+    success: boolean;
+    finalBalance: number;
+  }[];
+}

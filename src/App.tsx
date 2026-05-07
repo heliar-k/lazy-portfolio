@@ -22,6 +22,9 @@ const TemplateDetail = lazy(() =>
 const MarketPage = lazy(() =>
   import('@/components/market/MarketPage').then(m => ({ default: m.MarketPage })),
 );
+const WithdrawalPage = lazy(() =>
+  import('@/components/withdrawal/WithdrawalPage').then(m => ({ default: m.WithdrawalPage })),
+);
 
 function PageLoader() {
   return (
@@ -45,6 +48,7 @@ function AppRoutes() {
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/templates/:id" element={<TemplateDetail />} />
           <Route path="/market" element={<MarketPage />} />
+          <Route path="/withdrawal" element={<WithdrawalPage />} />
         </Routes>
       </Suspense>
     </AppShell>
