@@ -6,6 +6,7 @@ import { useBacktest } from '@/hooks/useBacktest';
 import { getBenchmark } from '@/benchmarks/definitions';
 import { runBenchmarkBacktest } from '@/benchmarks/runner';
 import { ParameterForm } from '@/components/backtest/ParameterForm';
+import { CashflowEditor } from '@/components/backtest/CashflowEditor';
 import { ResultsDashboard } from '@/components/backtest/ResultsDashboard';
 import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
 import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
@@ -17,7 +18,7 @@ export function BacktestPage() {
   const { params, result, benchmarkId, benchmarkResult, status,
     setStartDate, setEndDate, setInitialCapital,
     setRebalancing, setDisplayCurrency, setInflationRegion, setInflationAdjusted,
-    setPortfolio, setBenchmarkId, setBenchmarkResult,
+    setCashflows, setPortfolio, setBenchmarkId, setBenchmarkResult,
     setResult, setRunning, setError } = useBacktestStore();
   const { current: portfolio } = usePortfolioStore();
   const { result: hookResult, status: hookStatus, errorMessage: hookError,
@@ -100,6 +101,13 @@ export function BacktestPage() {
         canRun={canRun}
         isRunning={status === 'running'}
       />
+
+      <div className="mt-4">
+        <CashflowEditor
+          cashflows={params.cashflows}
+          onChange={setCashflows}
+        />
+      </div>
 
       <div className="mt-6 space-y-6">
         <ResultsDashboard
