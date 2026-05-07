@@ -149,5 +149,91 @@
     "tolerances": {
       "stdDevAnnualized": 0.015
     }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/stocks-bonds-60-40/",
+    "retrievedAt": "2026-05-05",
+    "description": "Stocks/Bonds 60/40 10-year view (2016-05 to 2026-04).",
+    "parameters": {
+      "startDate": "2016-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.6 },
+      { "symbol": "BND", "targetWeight": 0.4 }
+    ],
+    "metrics": {
+      "cagr": 0.0960,
+      "stdDevAnnualized": 0.1046,
+      "maxDrawdown": -0.2069
+    },
+    "tolerances": {
+      "cagr": 0.005
+    }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/ray-dalio-all-weather/",
+    "retrievedAt": "2026-05-05",
+    "description": "Ray Dalio All Weather 10-year view. DBC uses GOLD_SPOT proxy.",
+    "parameters": {
+      "startDate": "2016-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.3 },
+      { "symbol": "TLT", "targetWeight": 0.4 },
+      { "symbol": "IEI", "targetWeight": 0.15 },
+      { "symbol": "DBC", "targetWeight": 0.075 },
+      { "symbol": "GLD", "targetWeight": 0.075 }
+    ],
+    "metrics": {
+      "cagr": 0.0616,
+      "stdDevAnnualized": 0.0860,
+      "maxDrawdown": -0.2058
+    },
+    "tolerances": {
+      "cagr": 0.005,
+      "maxDrawdown": 0.05
+    }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/golden-butterfly/",
+    "retrievedAt": "2026-05-05",
+    "description": "Tyler Golden Butterfly 10-year view. IJS uses SP500_TR proxy — SCV underperformed large cap in this period, so our CAGR is overstated.",
+    "parameters": {
+      "startDate": "2016-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.2 },
+      { "symbol": "IJS", "targetWeight": 0.2 },
+      { "symbol": "SHY", "targetWeight": 0.2 },
+      { "symbol": "TLT", "targetWeight": 0.2 },
+      { "symbol": "GLD", "targetWeight": 0.2 }
+    ],
+    "metrics": {
+      "cagr": 0.0806,
+      "stdDevAnnualized": 0.0887,
+      "maxDrawdown": -0.1779
+    },
+    "tolerances": {
+      "cagr": 0.01,
+      "stdDevAnnualized": 0.015
+    }
   }
 ]
