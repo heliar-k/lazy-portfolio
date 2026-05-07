@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
+import { getCachedResult, setCachedResult } from '../lib/cache';
 import type { BacktestParameters, BacktestResult } from '../engine/types';
 
 interface UseBacktestReturn {
@@ -55,6 +56,15 @@ export function useBacktest(): UseBacktestReturn {
     setStatus('running');
     setErrorMessage(null);
 
+    // Check cache first
+    const cached = getCachedResult(params);
+    if (cached) {
+      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
+      setResult(cached);
+      setStatus('ready');
+      return;
+    }
+
     try {
       // 1. Resolve data (main thread — involves fetch)
       const assetReturns = await resolvePortfolioReturns(params.portfolio.holdings);
@@ -108,6 +118,7 @@ export function useBacktest(): UseBacktestReturn {
         if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
         setResult(result);
+        setCachedResult(params, result);
         setStatus('ready');
       } else {
         // Fallback: run on main thread via dynamic import
@@ -123,6 +134,7 @@ export function useBacktest(): UseBacktestReturn {
         );
 
         setResult(backtestResult);
+        setCachedResult(params, backtestResult);
         setStatus('ready');
       }
     } catch (err) {
