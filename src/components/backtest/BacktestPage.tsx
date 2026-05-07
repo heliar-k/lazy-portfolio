@@ -13,6 +13,7 @@ import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 import { ScatterChart } from '@/components/charts/ScatterChart';
+import { timeSeriesToCSV, downloadCSV } from '@/lib/export-csv';
 
 type BrushWindow = { start: string; end: string } | null;
 
@@ -97,6 +98,17 @@ export function BacktestPage() {
     setBrushWindow(null);
   }, []);
 
+  const handleExportCSV = useCallback(() => {
+    if (!result || result.timeSeries.length === 0) return;
+    const csv = timeSeriesToCSV(
+      result.timeSeries,
+      benchmarkResult?.timeSeries,
+      benchmarkResult?.parameters.portfolio.name,
+    );
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCSV(csv, `backtest-${date}.csv`);
+  }, [result, benchmarkResult]);
+
   const canRun = portfolio.holdings.length > 0;
 
   return (
@@ -142,6 +154,17 @@ export function BacktestPage() {
             className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
           >
             Reset zoom
+          </button>
+        </div>
+      )}
+
+      {status === 'ready' && result && result.timeSeries.length > 0 && (
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
+          >
+            Export CSV
           </button>
         </div>
       )}
