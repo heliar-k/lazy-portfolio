@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
 import { loadDataVersion } from '../data/loader';
 import { getCachedResult, setCachedResult } from '../lib/cache';
-import type { BacktestParameters, BacktestResult } from '../engine/types';
+import type { BacktestParameters, BacktestResult, MonthlyFxRatePoint } from '../engine/types';
 
 interface UseBacktestReturn {
   result: BacktestResult | null;
@@ -81,7 +81,7 @@ export function useBacktest(): UseBacktestReturn {
 
       if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
-      const fxRates = new Map<string, (number | null)[]>();
+      const fxRates = new Map<string, MonthlyFxRatePoint[]>();
       for (const holding of params.portfolio.holdings) {
         if (holding.asset.currency !== params.displayCurrency) {
           const rates = await resolveFxRates(

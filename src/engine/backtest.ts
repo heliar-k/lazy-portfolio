@@ -1,12 +1,13 @@
 import type {
   BacktestParameters,
   BacktestResult,
+  MonthlyFxRatePoint,
   MonthlyReturnPoint,
   MonthlyTimeSeriesPoint,
   PortfolioHolding,
 } from './types';
 import { alignReturnsToGrid } from './returns';
-import { convertReturnSeries } from './currency';
+import { alignFxRatesToGrid, convertReturnSeries } from './currency';
 import { compoundPortfolio, expandCashflows } from './compounding';
 import { adjustForInflation } from './inflation';
 import { computeMetrics, computeAnnualReturns } from './metrics';
@@ -22,7 +23,7 @@ import { computeMetrics, computeAnnualReturns } from './metrics';
 export function runBacktest(
   params: BacktestParameters,
   assetReturnSeries: Map<string, MonthlyReturnPoint[]>,
-  fxRates: Map<string, (number | null)[]>,
+  fxRates: Map<string, MonthlyFxRatePoint[]>,
   cpiSeries: Map<string, number>,
 ): BacktestResult {
   const {
@@ -37,7 +38,7 @@ export function runBacktest(
   const holdings = portfolio.holdings;
 
   // 1. Build month grid
-  const monthGrid = buildMonthGrid(startDate, endDate);
+  let monthGrid = buildMonthGrid(startDate, endDate);
   const nMonths = monthGrid.length;
 
   if (nMonths === 0 || holdings.length === 0) {
@@ -45,7 +46,7 @@ export function runBacktest(
   }
 
   // 2. Align each holding's native returns to the grid, convert currency
-  const alignedReturns: (number | null)[][] = [];
+  let alignedReturns: (number | null)[][] = [];
   for (const holding of holdings) {
     const native = assetReturnSeries.get(holding.asset.symbol) ?? [];
     let aligned = alignReturnsToGrid(native, monthGrid);
@@ -54,12 +55,25 @@ export function runBacktest(
       const pair = `${holding.asset.currency}${displayCurrency}`;
       const fx = fxRates.get(pair);
       if (fx) {
-        aligned = convertReturnSeries(aligned, fx);
+        const alignedFx = alignFxRatesToGrid(fx, monthGrid);
+        aligned = convertReturnSeries(aligned, alignedFx);
       }
     }
 
     alignedReturns.push(aligned);
   }
+
+  const effectiveStartIdx = findEffectiveStartIndex(alignedReturns);
+  if (effectiveStartIdx < 0) {
+    throw new Error('No overlapping return data for all holdings in the requested date range');
+  }
+
+  if (effectiveStartIdx > 0) {
+    monthGrid = monthGrid.slice(effectiveStartIdx);
+    alignedReturns = alignedReturns.map((series) => series.slice(effectiveStartIdx));
+  }
+
+  assertNoMissingReturnsAfterStart(alignedReturns, monthGrid, holdings);
 
   // 3. Expand recurring cashflows
   const cashflowSchedule = expandCashflows(cashflows);
@@ -69,7 +83,7 @@ export function runBacktest(
   //    Cashflows are invested at target weights so new money is split
   //    proportionally rather than following the drifted allocation.
   const targetWeights = holdings.map((h) => h.targetWeight);
-  const { values, cashflowImpacts, effectiveWeights } = compoundPortfolio(
+  const { values, cashflowImpacts, cashflowRequests, effectiveWeights } = compoundPortfolio(
     targetWeights,
     alignedReturns,
     initialCapital,
@@ -83,6 +97,7 @@ export function runBacktest(
     monthGrid,
     values,
     cashflowImpacts,
+    cashflowRequests,
     alignedReturns,
     effectiveWeights,
     holdings,
@@ -148,6 +163,7 @@ function buildTimeSeries(
   monthGrid: string[],
   values: number[],
   cashflowImpacts: number[],
+  cashflowRequests: number[],
   alignedReturns: (number | null)[][],
   effectiveWeights: number[][],
   holdings: PortfolioHolding[],
@@ -161,6 +177,7 @@ function buildTimeSeries(
   for (let m = 0; m < n; m++) {
     const portfolioValue = values[m] ?? 0;
     const cashflowImpact = cashflowImpacts[m] ?? 0;
+    const cashflowRequested = cashflowRequests[m] ?? cashflowImpact;
 
     // Monthly portfolio return: weighted average of asset returns (TWR).
     // Using asset-level returns rather than portfolio value changes ensures
@@ -194,10 +211,42 @@ function buildTimeSeries(
       drawdown,
       cumulativeReturn,
       cashflowImpact,
+      cashflowRequested,
     });
   }
 
   return series;
+}
+
+function findEffectiveStartIndex(
+  alignedReturns: (number | null)[][],
+): number {
+  const nMonths = alignedReturns[0]?.length ?? 0;
+
+  for (let m = 0; m < nMonths; m++) {
+    if (alignedReturns.every((series) => series[m] !== null)) {
+      return m;
+    }
+  }
+
+  return -1;
+}
+
+function assertNoMissingReturnsAfterStart(
+  alignedReturns: (number | null)[][],
+  monthGrid: string[],
+  holdings: PortfolioHolding[],
+): void {
+  for (let a = 0; a < alignedReturns.length; a++) {
+    for (let m = 0; m < monthGrid.length; m++) {
+      if (alignedReturns[a][m] === null) {
+        const symbol = holdings[a]?.asset.symbol ?? `asset ${a + 1}`;
+        throw new Error(
+          `Missing return data for ${symbol} at ${monthGrid[m]} after backtest start`,
+        );
+      }
+    }
+  }
 }
 
 function computeReturnDistribution(

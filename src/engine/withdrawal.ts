@@ -192,9 +192,15 @@ function simulateSinglePeriod(
 
   for (const point of timeSeries) {
     if (point.portfolioValue < minBalance) minBalance = point.portfolioValue;
+    const withdrawalShortfall =
+      point.cashflowRequested < 0 && point.cashflowImpact > point.cashflowRequested;
     if (point.portfolioValue <= 0 && !depletionDate) {
       depletionDate = point.date;
       success = false;
+    }
+    if (withdrawalShortfall) {
+      success = false;
+      if (!depletionDate) depletionDate = point.date;
     }
   }
 
@@ -210,7 +216,10 @@ function simulateSinglePeriod(
   for (let y = 0; y < retirementYears; y++) {
     const year = startYear + y;
     const cf = cashflows.find(c => c.date.startsWith(String(year)));
-    const withdrawalAmount = cf ? Math.abs(cf.amount) : 0;
+    const withdrawalRequested = cf ? Math.abs(cf.amount) : 0;
+    const withdrawalAmount = timeSeries
+      .filter(point => point.date.startsWith(String(year)) && point.cashflowImpact < 0)
+      .reduce((sum, point) => sum + Math.abs(point.cashflowImpact), 0);
     const portfolioValue = yearEndValues.get(year) ?? 0;
 
     maxWithdrawal = Math.max(maxWithdrawal, withdrawalAmount);
@@ -223,7 +232,13 @@ function simulateSinglePeriod(
       ? (portfolioValue + withdrawalAmount - prevValue) / prevValue
       : 0;
 
-    annualResults.push({ year, withdrawalAmount, portfolioValue, portfolioReturn });
+    annualResults.push({
+      year,
+      withdrawalAmount,
+      withdrawalRequested,
+      portfolioValue,
+      portfolioReturn,
+    });
   }
 
   if (minWithdrawal === Infinity) minWithdrawal = 0;

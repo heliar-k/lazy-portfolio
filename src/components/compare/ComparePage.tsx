@@ -160,7 +160,7 @@ export function ComparePage() {
           const assetReturns = await resolvePortfolioReturns(backtestParams.portfolio.holdings);
           const cpiSeries = await resolveCpiSeries(backtestParams.inflationRegion);
 
-          const fxRates = new Map<string, (number | null)[]>();
+          const fxRates = new Map<string, import('@/engine/types').MonthlyFxRatePoint[]>();
           for (const holding of backtestParams.portfolio.holdings) {
             if (holding.asset.currency !== backtestParams.displayCurrency) {
               const rates = await resolveFxRates(holding.asset.currency, backtestParams.displayCurrency);

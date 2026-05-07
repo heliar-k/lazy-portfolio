@@ -17,13 +17,14 @@ export function compoundPortfolio(
 ): {
   values: number[];
   cashflowImpacts: number[];
+  cashflowRequests: number[];
   effectiveWeights: number[][];
 } {
   const nAssets = targetWeights.length;
   const nMonths = months.length;
 
   if (nMonths === 0 || nAssets === 0) {
-    return { values: [], cashflowImpacts: [], effectiveWeights: [] };
+    return { values: [], cashflowImpacts: [], cashflowRequests: [], effectiveWeights: [] };
   }
 
   // Per-asset capital — starts at target weights
@@ -31,6 +32,7 @@ export function compoundPortfolio(
 
   const values: number[] = [];
   const cashflowImpacts: number[] = [];
+  const cashflowRequests: number[] = [];
   const effectiveWeights: number[][] = [];
 
   for (let m = 0; m < nMonths; m++) {
@@ -58,20 +60,22 @@ export function compoundPortfolio(
     // Apply cashflow at target weights so deposits/withdrawals are split
     // proportionally rather than going into whichever assets have drifted highest.
     const cf = cashflowSchedule.get(months[m]) ?? 0;
+    let actualCf = cf;
     if (cf !== 0) {
       const totalAfterReturns = assetCapital.reduce((s, v) => s + v, 0);
       // Cap withdrawal to available capital so values don't go negative
-      const actualCf = cf < 0 ? Math.max(cf, -totalAfterReturns) : cf;
+      actualCf = cf < 0 ? Math.max(cf, -totalAfterReturns) : cf;
       for (let a = 0; a < nAssets; a++) {
         assetCapital[a] += actualCf * targetWeights[a];
       }
     }
 
     values.push(assetCapital.reduce((s, v) => s + v, 0));
-    cashflowImpacts.push(cf);
+    cashflowImpacts.push(actualCf);
+    cashflowRequests.push(cf);
   }
 
-  return { values, cashflowImpacts, effectiveWeights };
+  return { values, cashflowImpacts, cashflowRequests, effectiveWeights };
 }
 
 /**

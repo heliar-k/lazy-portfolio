@@ -12,6 +12,7 @@ function makePoint(date: string, value: number, ret: number): MonthlyTimeSeriesP
     drawdown: 0,
     cumulativeReturn: 0,
     cashflowImpact: 0,
+    cashflowRequested: 0,
   };
 }
 

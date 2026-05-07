@@ -1,11 +1,11 @@
-import type { MonthlyPricePoint, DataVersion } from '../engine/types';
+import type { MonthlyFxRatePoint, MonthlyPricePoint, DataVersion } from '../engine/types';
 
 const BASE = '/data';
 
 // In-memory cache for loaded data
 const priceCache = new Map<string, MonthlyPricePoint[]>();
 const cpiCache = new Map<string, Map<string, number>>();
-const fxCache = new Map<string, (number | null)[]>();
+const fxCache = new Map<string, MonthlyFxRatePoint[]>();
 
 let etfMapCache: EtfMapEntry[] | null = null;
 let dataVersionCache: DataVersion | null = null;
@@ -103,7 +103,7 @@ export async function loadCpiSeries(region: string): Promise<Map<string, number>
  * CSV format: date,rate
  * Returns array of rates aligned with months (rate[i] = rate at end of month i).
  */
-export async function loadFxSeries(pair: string): Promise<(number | null)[]> {
+export async function loadFxSeries(pair: string): Promise<MonthlyFxRatePoint[]> {
   const key = pair.toLowerCase();
   if (fxCache.has(key)) return fxCache.get(key)!;
 
@@ -160,19 +160,21 @@ function parseCpiCsv(csv: string): Map<string, number> {
   return map;
 }
 
-/** Parse an FX rate CSV into number[] sorted by date. */
-function parseFxCsv(csv: string): (number | null)[] {
+/** Parse an FX rate CSV into dated monthly rate points. */
+function parseFxCsv(csv: string): MonthlyFxRatePoint[] {
   const lines = csv.trim().split('\n');
-  const rates: (number | null)[] = [];
+  const rates: MonthlyFxRatePoint[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    const [_date, rateStr] = line.split(',');
+    const [date, rateStr] = line.split(',');
     const rate = parseFloat(rateStr);
 
-    rates.push(!isNaN(rate) ? rate : null);
+    if (date && !isNaN(rate)) {
+      rates.push({ date, rate });
+    }
   }
 
   return rates;

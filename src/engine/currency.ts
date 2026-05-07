@@ -1,3 +1,7 @@
+import type { MonthlyFxRatePoint } from './types';
+
+const MAX_FX_FORWARD_FILL_MONTHS = 3;
+
 /**
  * Convert a monthly return from one currency to another using FX rate changes.
  *
@@ -29,8 +33,10 @@ export function convertReturnSeries(
   }
 
   const result: (number | null)[] = [];
-  // First month has no return (need previous month to compute return)
-  result.push(nativeReturns[0] ?? null);
+  // First month has no prior FX rate in the aligned window. Keep the native
+  // return only when the current FX level exists; otherwise mark missing so the
+  // caller can advance the effective start date or fail on a data gap.
+  result.push(nativeReturns[0] === null || fxRates[0] === null ? null : nativeReturns[0]);
 
   for (let i = 1; i < nativeReturns.length; i++) {
     const nr = nativeReturns[i];
@@ -38,9 +44,53 @@ export function convertReturnSeries(
     const fxCurr = fxRates[i];
 
     if (nr === null || fxPrev === null || fxCurr === null) {
-      result.push(nr); // pass through as-is or null
+      result.push(null);
     } else {
       result.push(convertReturn(nr, fxCurr, fxPrev));
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Align dated FX rate levels to a monthly grid.
+ * FX rates are end-of-month levels, not returns. Missing levels are
+ * forward-filled for up to 3 months; longer gaps remain null.
+ */
+export function alignFxRatesToGrid(
+  fxRates: MonthlyFxRatePoint[],
+  months: string[],
+): (number | null)[] {
+  if (fxRates.length === 0) {
+    return months.map(() => null);
+  }
+
+  const rateByDate = new Map<string, number>();
+  for (const point of fxRates) {
+    if (point.rate > 0 && Number.isFinite(point.rate)) {
+      rateByDate.set(point.date, point.rate);
+    }
+  }
+
+  const result: (number | null)[] = [];
+  let lastKnownIdx = -1;
+  let lastKnownRate: number | null = null;
+
+  for (let i = 0; i < months.length; i++) {
+    const rate = rateByDate.get(months[i]);
+
+    if (rate !== undefined) {
+      result.push(rate);
+      lastKnownIdx = i;
+      lastKnownRate = rate;
+    } else if (
+      lastKnownRate !== null &&
+      i - lastKnownIdx <= MAX_FX_FORWARD_FILL_MONTHS
+    ) {
+      result.push(lastKnownRate);
+    } else {
+      result.push(null);
     }
   }
 

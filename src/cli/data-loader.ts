@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { MonthlyPricePoint } from '../engine/types';
+import type { MonthlyFxRatePoint, MonthlyPricePoint } from '../engine/types';
 
 export interface EtfMapEntry {
   symbol: string;
@@ -62,20 +62,20 @@ export function loadCpiSeries(
 export function loadFxSeries(
   pair: string,
   dataDir = DEFAULT_DATA_DIR,
-): (number | null)[] {
+): MonthlyFxRatePoint[] {
   const filePath = path.join(dataDir, 'proxies', 'fx', `${pair.toLowerCase()}.csv`);
   if (!fs.existsSync(filePath)) return [];
 
   const csv = fs.readFileSync(filePath, 'utf-8');
   const lines = csv.trim().split('\n');
-  const rates: (number | null)[] = [];
+  const rates: MonthlyFxRatePoint[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const [, rateStr] = line.split(',');
+    const [date, rateStr] = line.split(',');
     const rate = parseFloat(rateStr);
-    rates.push(!isNaN(rate) ? rate : null);
+    if (date && !isNaN(rate)) rates.push({ date, rate });
   }
 
   return rates;

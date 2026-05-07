@@ -8,6 +8,7 @@ import { computeMonthlyReturns } from '../engine/returns';
 import type { EtfMapEntry } from './loader';
 import type {
   AssetIdentifier,
+  MonthlyFxRatePoint,
   MonthlyReturnPoint,
   PortfolioHolding,
 } from '../engine/types';
@@ -91,7 +92,7 @@ export async function resolveCpiSeries(
 export async function resolveFxRates(
   fromCurrency: string,
   toCurrency: string,
-): Promise<(number | null)[]> {
+): Promise<MonthlyFxRatePoint[]> {
   if (fromCurrency === toCurrency) return [];
 
   const pair = `${fromCurrency}${toCurrency}`.toLowerCase();

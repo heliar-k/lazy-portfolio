@@ -1,4 +1,4 @@
-import type { BacktestParameters, BacktestResult, MonthlyReturnPoint } from '../engine/types';
+import type { BacktestParameters, BacktestResult, MonthlyFxRatePoint, MonthlyReturnPoint } from '../engine/types';
 import type { BenchmarkDefinition } from '../engine/types';
 import { loadProxySeries } from '../data/loader';
 import { computeMonthlyReturns } from '../engine/returns';
@@ -25,7 +25,7 @@ export async function runBenchmarkBacktest(
   // Load CPI and FX data
   const cpiSeries = await resolveCpiSeries(params.inflationRegion);
 
-  const fxRates = new Map<string, (number | null)[]>();
+  const fxRates = new Map<string, MonthlyFxRatePoint[]>();
   // Benchmarks are always USD-nominated
   if (params.displayCurrency !== 'USD') {
     const rates = await resolveFxRates('USD', params.displayCurrency);

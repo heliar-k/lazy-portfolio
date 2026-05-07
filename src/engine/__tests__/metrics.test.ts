@@ -28,6 +28,7 @@ function makeSeries(
       drawdown: dd,
       cumulativeReturn: initialCapital > 0 ? (val / initialCapital) - 1 : 0,
       cashflowImpact: 0,
+      cashflowRequested: 0,
     });
   }
 

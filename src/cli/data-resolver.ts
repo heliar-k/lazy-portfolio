@@ -3,6 +3,7 @@ import type { EtfMapEntry } from './data-loader';
 import { computeMonthlyReturns } from '../engine/returns';
 import type {
   PortfolioHolding,
+  MonthlyFxRatePoint,
   MonthlyReturnPoint,
   DisplayCurrency,
 } from '../engine/types';
@@ -15,7 +16,7 @@ export function resolvePortfolioData(
   dataDir?: string,
 ): {
   assetReturns: Map<string, MonthlyReturnPoint[]>;
-  fxRates: Map<string, (number | null)[]>;
+  fxRates: Map<string, MonthlyFxRatePoint[]>;
   cpiSeries: Map<string, number>;
 } {
   const etfMap = loadEtfMap(dataDir);
@@ -24,7 +25,7 @@ export function resolvePortfolioData(
   );
 
   const assetReturns = new Map<string, MonthlyReturnPoint[]>();
-  const fxRates = new Map<string, (number | null)[]>();
+  const fxRates = new Map<string, MonthlyFxRatePoint[]>();
 
   for (const holding of holdings) {
     const symbol = holding.asset.symbol;

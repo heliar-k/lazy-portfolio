@@ -211,6 +211,35 @@ describe('runBacktest', () => {
     expect(result.metrics.totalWithdrawals).toBe(2000);
   });
 
+  it('reports actual withdrawals in metrics and requested cashflows in time series', () => {
+    const params = makeParams({
+      startDate: '2020-01',
+      endDate: '2020-02',
+      initialCapital: 1000,
+      inflationAdjusted: false,
+      portfolio: {
+        id: 'withdrawal-overrun',
+        name: 'Withdrawal Overrun',
+        holdings: [{ asset: makeAsset('CASH'), targetWeight: 1 }],
+        tags: [],
+      },
+      cashflows: [{ date: '2020-02-29', amount: -1500, type: 'withdrawal' }],
+    });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('CASH', [
+      { date: '2020-01-31', totalReturn: 0 },
+      { date: '2020-02-29', totalReturn: 0 },
+    ]);
+
+    const result = runBacktest(params, assetReturns, new Map(), new Map());
+
+    expect(result.timeSeries[1].portfolioValue).toBe(0);
+    expect(result.timeSeries[1].cashflowRequested).toBe(-1500);
+    expect(result.timeSeries[1].cashflowImpact).toBe(-1000);
+    expect(result.metrics.totalWithdrawals).toBe(1000);
+  });
+
   it('CAGR (TWR) is not distorted by large cashflows', () => {
     // With monthly rebalancing, effectiveWeights are always reset to [0.6, 0.4]
     // each month before returns are applied — so the monthly return is always
@@ -241,5 +270,116 @@ describe('runBacktest', () => {
 
     // But final capital should be much larger due to the compounding deposit
     expect(r2.metrics.finalCapital).toBeGreaterThan(r1.metrics.finalCapital + 40000);
+  });
+
+  it('advances the effective start date until all holdings have return data', () => {
+    const params = makeParams({ startDate: '2020-01', endDate: '2020-03', inflationAdjusted: false });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('STOCK', [
+      { date: '2020-01-31', totalReturn: 0.01 },
+      { date: '2020-02-29', totalReturn: 0.01 },
+      { date: '2020-03-31', totalReturn: 0.01 },
+    ]);
+    assetReturns.set('BOND', [
+      { date: '2020-03-31', totalReturn: 0.00 },
+    ]);
+
+    const result = runBacktest(params, assetReturns, new Map(), new Map());
+
+    expect(result.timeSeries[0].date).toBe('2020-03-31');
+    expect(result.timeSeries).toHaveLength(1);
+  });
+
+  it('throws when a holding has a missing return after the effective start date', () => {
+    const params = makeParams({ startDate: '2020-01', endDate: '2020-07', inflationAdjusted: false });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('STOCK', [
+      { date: '2020-01-31', totalReturn: 0.00 },
+      { date: '2020-02-29', totalReturn: 0.01 },
+    ]);
+    assetReturns.set('BOND', makeReturnSeries([0, 0, 0, 0, 0, 0, 0]));
+
+    expect(() => runBacktest(params, assetReturns, new Map(), new Map()))
+      .toThrow('Missing return data for STOCK at 2020-06-30 after backtest start');
+  });
+
+  it('throws when holdings have no overlapping return data', () => {
+    const params = makeParams({ startDate: '2020-01', endDate: '2020-03', inflationAdjusted: false });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('STOCK', [
+      { date: '2020-01-31', totalReturn: 0.01 },
+    ]);
+    assetReturns.set('BOND', []);
+
+    expect(() => runBacktest(params, assetReturns, new Map(), new Map()))
+      .toThrow('No overlapping return data for all holdings in the requested date range');
+  });
+
+  it('converts FX using dates aligned to the backtest month grid', () => {
+    const params = makeParams({
+      startDate: '2020-02',
+      endDate: '2020-03',
+      inflationAdjusted: false,
+      portfolio: {
+        id: 'fx-test',
+        name: 'FX Test',
+        holdings: [{ asset: makeAsset('INTL', 'EUR'), targetWeight: 1 }],
+        tags: [],
+      },
+      displayCurrency: 'USD',
+    });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('INTL', [
+      { date: '2020-02-29', totalReturn: 0.00 },
+      { date: '2020-03-31', totalReturn: 0.00 },
+    ]);
+
+    const fxRates = new Map();
+    fxRates.set('EURUSD', [
+      { date: '2020-01-31', rate: 1.00 },
+      { date: '2020-02-29', rate: 1.10 },
+      { date: '2020-03-31', rate: 1.21 },
+    ]);
+
+    const result = runBacktest(params, assetReturns, fxRates, new Map());
+
+    expect(result.timeSeries[0].date).toBe('2020-02-29');
+    expect(result.timeSeries[0].monthlyReturn).toBe(0);
+    expect(result.timeSeries[1].monthlyReturn).toBeCloseTo(0.10);
+  });
+
+  it('throws when FX data has a long gap after the effective start date', () => {
+    const params = makeParams({
+      startDate: '2020-01',
+      endDate: '2020-06',
+      inflationAdjusted: false,
+      portfolio: {
+        id: 'fx-gap-test',
+        name: 'FX Gap Test',
+        holdings: [{ asset: makeAsset('INTL', 'EUR'), targetWeight: 1 }],
+        tags: [],
+      },
+      displayCurrency: 'USD',
+    });
+
+    const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+    assetReturns.set('INTL', [
+      { date: '2020-01-31', totalReturn: 0.00 },
+      { date: '2020-02-29', totalReturn: 0.00 },
+      { date: '2020-03-31', totalReturn: 0.00 },
+      { date: '2020-04-30', totalReturn: 0.00 },
+      { date: '2020-05-31', totalReturn: 0.00 },
+      { date: '2020-06-30', totalReturn: 0.00 },
+    ]);
+
+    const fxRates = new Map();
+    fxRates.set('EURUSD', [{ date: '2020-01-31', rate: 1.10 }]);
+
+    expect(() => runBacktest(params, assetReturns, fxRates, new Map()))
+      .toThrow('Missing return data for INTL at 2020-05-31 after backtest start');
   });
 });

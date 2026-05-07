@@ -2,6 +2,7 @@ import { runBacktest } from '../engine/backtest';
 import type {
   BacktestParameters,
   BacktestResult,
+  MonthlyFxRatePoint,
   MonthlyReturnPoint,
 } from '../engine/types';
 
@@ -9,7 +10,7 @@ interface WorkerRequest {
   id: number;
   params: BacktestParameters;
   assetReturns: [string, MonthlyReturnPoint[]][];
-  fxRates: [string, (number | null)[]][];
+  fxRates: [string, MonthlyFxRatePoint[]][];
   cpiSeries: [string, number][];
 }
 

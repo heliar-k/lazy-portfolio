@@ -89,6 +89,11 @@ export interface MonthlyReturnPoint {
   totalReturn: number; // e.g., 0.01 = 1%
 }
 
+export interface MonthlyFxRatePoint {
+  date: string;
+  rate: number;
+}
+
 // ---- Rebalancing ----
 
 export type RebalancingFrequency = 'monthly' | 'quarterly' | 'annual';
@@ -132,6 +137,7 @@ export interface MonthlyTimeSeriesPoint {
   drawdown: number; // 0.0 to -1.0
   cumulativeReturn: number;
   cashflowImpact: number;
+  cashflowRequested: number;
 }
 
 export interface BacktestMetrics {
@@ -249,6 +255,7 @@ export interface SinglePeriodResult {
   annualResults: {
     year: number;
     withdrawalAmount: number;
+    withdrawalRequested: number;
     portfolioValue: number;
     portfolioReturn: number;
   }[];

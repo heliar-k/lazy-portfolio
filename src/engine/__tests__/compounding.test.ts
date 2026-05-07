@@ -228,4 +228,24 @@ describe('compoundPortfolio', () => {
     expect(stockWeight4).toBeLessThan(0.660); // not the drifted value
     expect(stockWeight4).toBeGreaterThan(0.640); // closer to target 60%
   });
+
+  it('tracks requested and applied cashflows separately when withdrawal exceeds portfolio value', () => {
+    const months = ['2020-01-31', '2020-02-29'];
+    const returns: (number | null)[][] = [[0, 0]];
+    const cashflows = new Map<string, number>();
+    cashflows.set(months[1], -1500);
+
+    const { values, cashflowImpacts, cashflowRequests } = compoundPortfolio(
+      [1.0],
+      returns,
+      1000,
+      cashflows,
+      months,
+      { type: 'calendar', frequency: 'annual' },
+    );
+
+    expect(values[1]).toBe(0);
+    expect(cashflowRequests[1]).toBe(-1500);
+    expect(cashflowImpacts[1]).toBe(-1000);
+  });
 });

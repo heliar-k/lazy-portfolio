@@ -116,7 +116,7 @@ async function runSlotBacktest(
   const backtestParams: BacktestParameters = { ...params, portfolio };
   const assetReturns = await resolvePortfolioReturns(portfolio.holdings);
   const cpiSeries = await resolveCpiSeries(params.inflationRegion);
-  const fxRates = new Map<string, (number | null)[]>();
+  const fxRates = new Map<string, import('@/engine/types').MonthlyFxRatePoint[]>();
   for (const holding of portfolio.holdings) {
     if (holding.asset.currency !== params.displayCurrency) {
       const rates = await resolveFxRates(holding.asset.currency, params.displayCurrency);
