@@ -1,17 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBacktestStore } from '@/stores/backtest-store';
 import { usePortfolioStore } from '@/stores/portfolio-store';
 import { useBacktest } from '@/hooks/useBacktest';
+import { getBenchmark } from '@/benchmarks/definitions';
+import { runBenchmarkBacktest } from '@/benchmarks/runner';
 import { ParameterForm } from '@/components/backtest/ParameterForm';
 import { ResultsDashboard } from '@/components/backtest/ResultsDashboard';
 import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
 
 export function BacktestPage() {
   const { t } = useTranslation();
-  const { params, result, status, setStartDate, setEndDate, setInitialCapital,
+  const { params, result, benchmarkId, benchmarkResult, status,
+    setStartDate, setEndDate, setInitialCapital,
     setRebalancing, setDisplayCurrency, setInflationRegion, setInflationAdjusted,
-    setPortfolio, setResult, setRunning, setError } = useBacktestStore();
+    setPortfolio, setBenchmarkId, setBenchmarkResult,
+    setResult, setRunning, setError } = useBacktestStore();
   const { current: portfolio } = usePortfolioStore();
   const { result: hookResult, status: hookStatus, errorMessage: hookError,
     run, reset: _reset } = useBacktest();
@@ -40,9 +44,31 @@ export function BacktestPage() {
     }
   }, [hookStatus, setRunning]);
 
-  const handleRunBacktest = async () => {
-    await run({ ...params, portfolio });
-  };
+  const handleRunBacktest = useCallback(async () => {
+    const backtestParams = { ...params, portfolio };
+    await run(backtestParams);
+
+    // Run benchmark if selected
+    if (benchmarkId) {
+      const benchmark = getBenchmark(benchmarkId);
+      if (benchmark) {
+        try {
+          const benchResult = await runBenchmarkBacktest(backtestParams, benchmark);
+          setBenchmarkResult(benchResult);
+        } catch {
+          // Benchmark failure is non-blocking
+          setBenchmarkResult(null);
+        }
+      }
+    } else {
+      setBenchmarkResult(null);
+    }
+  }, [params, portfolio, benchmarkId, run, setBenchmarkResult]);
+
+  const handleBenchmarkChange = useCallback((id: string | null) => {
+    setBenchmarkId(id);
+    if (!id) setBenchmarkResult(null);
+  }, [setBenchmarkId, setBenchmarkResult]);
 
   const canRun = portfolio.holdings.length > 0;
 
@@ -58,6 +84,7 @@ export function BacktestPage() {
         displayCurrency={params.displayCurrency}
         inflationRegion={params.inflationRegion}
         inflationAdjusted={params.inflationAdjusted}
+        benchmarkId={benchmarkId}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onCapitalChange={setInitialCapital}
@@ -65,16 +92,24 @@ export function BacktestPage() {
         onCurrencyChange={setDisplayCurrency}
         onInflationChange={setInflationRegion}
         onInflationAdjustedChange={setInflationAdjusted}
+        onBenchmarkChange={handleBenchmarkChange}
         onRun={handleRunBacktest}
         canRun={canRun}
         isRunning={status === 'running'}
       />
 
       <div className="mt-6 space-y-6">
-        <ResultsDashboard metrics={result?.metrics ?? null} status={status} />
+        <ResultsDashboard
+          metrics={result?.metrics ?? null}
+          benchmarkMetrics={benchmarkResult?.metrics ?? null}
+          benchmarkName={benchmarkResult?.parameters.portfolio.name}
+          status={status}
+        />
 
         <EquityCurveChart
           timeSeries={result?.timeSeries ?? []}
+          benchmarkTimeSeries={benchmarkResult?.timeSeries ?? []}
+          benchmarkName={benchmarkResult?.parameters.portfolio.name}
           status={status}
         />
 

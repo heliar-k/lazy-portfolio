@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { RebalancingStrategy, DisplayCurrency, Region } from '@/engine/types';
+import { BUILT_IN_BENCHMARKS } from '@/benchmarks/definitions';
 
 interface ParameterFormProps {
   startDate: string;
@@ -9,6 +10,7 @@ interface ParameterFormProps {
   displayCurrency: DisplayCurrency;
   inflationRegion: Region;
   inflationAdjusted: boolean;
+  benchmarkId: string | null;
   onStartDateChange: (d: string) => void;
   onEndDateChange: (d: string) => void;
   onCapitalChange: (c: number) => void;
@@ -16,6 +18,7 @@ interface ParameterFormProps {
   onCurrencyChange: (c: DisplayCurrency) => void;
   onInflationChange: (r: Region) => void;
   onInflationAdjustedChange: (enabled: boolean) => void;
+  onBenchmarkChange: (id: string | null) => void;
   onRun: () => void;
   canRun: boolean;
   isRunning: boolean;
@@ -45,6 +48,7 @@ export function ParameterForm({
   displayCurrency,
   inflationRegion,
   inflationAdjusted,
+  benchmarkId,
   onStartDateChange,
   onEndDateChange,
   onCapitalChange,
@@ -52,6 +56,7 @@ export function ParameterForm({
   onCurrencyChange,
   onInflationChange,
   onInflationAdjustedChange,
+  onBenchmarkChange,
   onRun,
   canRun,
   isRunning,
@@ -176,6 +181,22 @@ export function ParameterForm({
           <label htmlFor="inflation-adjusted" className="text-xs text-gray-600">
             {t('backtest.inflationAdjust')}
           </label>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">
+            {t('backtest.benchmark')}
+          </label>
+          <select
+            value={benchmarkId ?? ''}
+            onChange={(e) => onBenchmarkChange(e.target.value || null)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm
+              focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">— None —</option>
+            {BUILT_IN_BENCHMARKS.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
         </div>
         <button
           onClick={onRun}

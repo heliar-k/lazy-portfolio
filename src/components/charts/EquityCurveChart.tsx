@@ -4,17 +4,81 @@ import type { MonthlyTimeSeriesPoint } from '@/engine/types';
 
 interface EquityCurveChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
+  benchmarkTimeSeries?: MonthlyTimeSeriesPoint[];
+  benchmarkName?: string;
   status: 'idle' | 'running' | 'ready' | 'error';
 }
 
-export function EquityCurveChart({ timeSeries, status }: EquityCurveChartProps) {
+export function EquityCurveChart({
+  timeSeries,
+  benchmarkTimeSeries,
+  benchmarkName,
+  status,
+}: EquityCurveChartProps) {
   const option = useMemo(() => {
     if (!timeSeries || timeSeries.length === 0) return {};
 
     const dates = timeSeries.map((p) => p.date);
     const values = timeSeries.map((p) => p.portfolioValue);
     const realValues = timeSeries.map((p) => p.portfolioValueReal);
-    const drawdowns = timeSeries.map((p) => p.drawdown * 100); // as percentage
+    const drawdowns = timeSeries.map((p) => p.drawdown * 100);
+
+    const legendData = ['Portfolio Value'];
+    if (realValues.some((v) => v !== values.find((pv, i) => pv === timeSeries[i]?.portfolioValueReal))) {
+      legendData.push('Real Value (Inflation-Adjusted)');
+    }
+    legendData.push('Drawdown');
+
+    const series: Record<string, unknown>[] = [
+      {
+        name: 'Portfolio Value',
+        type: 'line',
+        data: values,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: '#3b82f6', width: 2 },
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+      },
+      {
+        name: 'Real Value (Inflation-Adjusted)',
+        type: 'line',
+        data: realValues,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: '#93c5fd', width: 1.5, type: 'dashed' },
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+      },
+      {
+        name: 'Drawdown',
+        type: 'line',
+        data: drawdowns,
+        smooth: false,
+        symbol: 'none',
+        lineStyle: { color: '#ef4444', width: 1 },
+        areaStyle: { color: 'rgba(239, 68, 68, 0.15)' },
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+      },
+    ];
+
+    // Add benchmark series if provided
+    if (benchmarkTimeSeries && benchmarkTimeSeries.length > 0) {
+      const benchName = benchmarkName || 'Benchmark';
+      const benchValues = benchmarkTimeSeries.map((p) => p.portfolioValue);
+      legendData.splice(1, 0, benchName);
+      series.splice(1, 0, {
+        name: benchName,
+        type: 'line',
+        data: benchValues,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: '#f97316', width: 2, type: 'dotted' },
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+      });
+    }
 
     return {
       tooltip: {
@@ -33,7 +97,7 @@ export function EquityCurveChart({ timeSeries, status }: EquityCurveChartProps) 
         },
       },
       legend: {
-        data: ['Portfolio Value', 'Real Value (Inflation-Adjusted)', 'Drawdown'],
+        data: legendData,
         top: 0,
         textStyle: { fontSize: 12 },
       },
@@ -94,41 +158,9 @@ export function EquityCurveChart({ timeSeries, status }: EquityCurveChartProps) 
           borderColor: '#e5e7eb',
         },
       ],
-      series: [
-        {
-          name: 'Portfolio Value',
-          type: 'line',
-          data: values,
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { color: '#3b82f6', width: 2 },
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-        },
-        {
-          name: 'Real Value (Inflation-Adjusted)',
-          type: 'line',
-          data: realValues,
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { color: '#93c5fd', width: 1.5, type: 'dashed' },
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-        },
-        {
-          name: 'Drawdown',
-          type: 'line',
-          data: drawdowns,
-          smooth: false,
-          symbol: 'none',
-          lineStyle: { color: '#ef4444', width: 1 },
-          areaStyle: { color: 'rgba(239, 68, 68, 0.15)' },
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-        },
-      ],
+      series,
     };
-  }, [timeSeries]);
+  }, [timeSeries, benchmarkTimeSeries, benchmarkName]);
 
   if (status === 'idle') {
     return (

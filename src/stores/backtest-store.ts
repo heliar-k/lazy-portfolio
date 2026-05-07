@@ -14,8 +14,11 @@ type ComputationStatus = 'idle' | 'running' | 'ready' | 'error';
 interface BacktestState {
   // Parameters
   params: BacktestParameters;
+  // Benchmark selection
+  benchmarkId: string | null;
   // Results
   result: BacktestResult | null;
+  benchmarkResult: BacktestResult | null;
   // Status
   status: ComputationStatus;
   errorMessage: string | null;
@@ -32,7 +35,9 @@ interface BacktestState {
   setRebalancing: (strategy: RebalancingStrategy) => void;
   setCashflows: (cashflows: CashflowEvent[]) => void;
   setPortfolio: (portfolio: PortfolioDefinition) => void;
+  setBenchmarkId: (id: string | null) => void;
   setResult: (result: BacktestResult) => void;
+  setBenchmarkResult: (result: BacktestResult | null) => void;
   setRunning: () => void;
   setError: (message: string) => void;
   reset: () => void;
@@ -58,7 +63,9 @@ function defaultParams(): BacktestParameters {
 
 export const useBacktestStore = create<BacktestState>()((set) => ({
   params: defaultParams(),
+  benchmarkId: null,
   result: null,
+  benchmarkResult: null,
   status: 'idle',
   errorMessage: null,
   cache: new Map(),
@@ -90,8 +97,14 @@ export const useBacktestStore = create<BacktestState>()((set) => ({
   setPortfolio: (portfolio) =>
     set((s) => ({ params: { ...s.params, portfolio } })),
 
+  setBenchmarkId: (id) =>
+    set({ benchmarkId: id, benchmarkResult: null }),
+
   setResult: (result) =>
     set({ result, status: 'ready', errorMessage: null }),
+
+  setBenchmarkResult: (benchmarkResult) =>
+    set({ benchmarkResult }),
 
   setRunning: () =>
     set({ status: 'running', errorMessage: null }),
@@ -100,5 +113,5 @@ export const useBacktestStore = create<BacktestState>()((set) => ({
     set({ status: 'error', errorMessage: message }),
 
   reset: () =>
-    set({ params: defaultParams(), result: null, status: 'idle', errorMessage: null }),
+    set({ params: defaultParams(), result: null, benchmarkResult: null, benchmarkId: null, status: 'idle', errorMessage: null }),
 }));
