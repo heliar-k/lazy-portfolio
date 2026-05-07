@@ -8,6 +8,9 @@ import { runBenchmarkBacktest } from '@/benchmarks/runner';
 import { ParameterForm } from '@/components/backtest/ParameterForm';
 import { ResultsDashboard } from '@/components/backtest/ResultsDashboard';
 import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
+import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
+import { DrawdownChart } from '@/components/charts/DrawdownChart';
+import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 
 export function BacktestPage() {
   const { t } = useTranslation();
@@ -113,28 +116,17 @@ export function BacktestPage() {
           status={status}
         />
 
-        {result && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Annual Returns
-            </h3>
-            <div className="flex flex-wrap gap-1">
-              {result.annualReturns.map((yr) => (
-                <div
-                  key={yr.year}
-                  className={`px-3 py-1.5 rounded text-sm font-medium ${
-                    yr.return >= 0
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                  }`}
-                >
-                  <span className="text-xs text-gray-500">{yr.year}</span>{' '}
-                  {(yr.return * 100).toFixed(1)}%
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <DrawdownChart
+          timeSeries={result?.timeSeries ?? []}
+          status={status}
+        />
+
+        <AnnualReturnsChart result={result} status={status} />
+
+        <RollingReturnsChart
+          timeSeries={result?.timeSeries ?? []}
+          status={status}
+        />
       </div>
     </div>
   );
