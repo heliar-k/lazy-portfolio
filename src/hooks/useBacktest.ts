@@ -1,5 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
-import { runBacktest } from '../engine/backtest';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
 import type { BacktestParameters, BacktestResult } from '../engine/types';
 
@@ -13,39 +12,59 @@ interface UseBacktestReturn {
 
 /**
  * Hook to run a backtest from the UI.
- * Handles data loading, engine execution, and error states.
+ * Uses a Web Worker to keep the main thread responsive during heavy computation.
+ * Falls back to main-thread execution if workers are unavailable.
  */
 export function useBacktest(): UseBacktestReturn {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [status, setStatus] = useState<'idle' | 'running' | 'ready' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const requestIdRef = useRef(0);
+  const abortRef = useRef(false);
+
+  // Cleanup worker on unmount
+  useEffect(() => {
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  const getWorker = useCallback((): Worker | null => {
+    try {
+      if (workerRef.current) return workerRef.current;
+      workerRef.current = new Worker(
+        new URL('../workers/backtest.worker.ts', import.meta.url),
+        { type: 'module' },
+      );
+      return workerRef.current;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const run = useCallback(async (params: BacktestParameters) => {
     // Abort previous run
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortRef.current = controller;
+    abortRef.current = true;
+    workerRef.current?.terminate();
+    workerRef.current = null;
+
+    abortRef.current = false;
+    const currentRequestId = ++requestIdRef.current;
 
     setStatus('running');
     setErrorMessage(null);
 
     try {
-      // 1. Resolve portfolio returns for each holding
-      const assetReturns = await resolvePortfolioReturns(
-        params.portfolio.holdings,
-      );
+      // 1. Resolve data (main thread — involves fetch)
+      const assetReturns = await resolvePortfolioReturns(params.portfolio.holdings);
 
-      if (controller.signal.aborted) return;
+      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
-      // 2. Resolve CPI data for inflation adjustment
       const cpiSeries = await resolveCpiSeries(params.inflationRegion);
 
-      if (controller.signal.aborted) return;
+      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
-      // 3. Resolve FX rates for each holding that needs currency conversion
       const fxRates = new Map<string, (number | null)[]>();
       for (const holding of params.portfolio.holdings) {
         if (holding.asset.currency !== params.displayCurrency) {
@@ -58,29 +77,66 @@ export function useBacktest(): UseBacktestReturn {
         }
       }
 
-      if (controller.signal.aborted) return;
+      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
-      // 4. Run the backtest engine
-      const backtestResult = runBacktest(
-        params,
-        assetReturns,
-        fxRates,
-        cpiSeries,
-      );
+      // 2. Offload computation to worker (or fallback to main thread)
+      const worker = getWorker();
 
-      setResult(backtestResult);
-      setStatus('ready');
+      if (worker) {
+        // Serialize Maps to arrays for postMessage
+        const result = await new Promise<BacktestResult>((resolve, reject) => {
+          worker.onmessage = (e) => {
+            const { id, result, error } = e.data;
+            if (id !== currentRequestId) return;
+            if (error) reject(new Error(error));
+            else resolve(result as BacktestResult);
+          };
+
+          worker.onerror = (err) => {
+            reject(new Error(err.message || 'Worker error'));
+          };
+
+          worker.postMessage({
+            id: currentRequestId,
+            params,
+            assetReturns: Array.from(assetReturns.entries()),
+            fxRates: Array.from(fxRates.entries()),
+            cpiSeries: Array.from(cpiSeries.entries()),
+          });
+        });
+
+        if (abortRef.current || currentRequestId !== requestIdRef.current) return;
+
+        setResult(result);
+        setStatus('ready');
+      } else {
+        // Fallback: run on main thread via dynamic import
+        const { runBacktest } = await import('../engine/backtest');
+
+        if (abortRef.current || currentRequestId !== requestIdRef.current) return;
+
+        const backtestResult = runBacktest(
+          params,
+          assetReturns,
+          fxRates,
+          cpiSeries,
+        );
+
+        setResult(backtestResult);
+        setStatus('ready');
+      }
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
+      if (abortRef.current || currentRequestId !== requestIdRef.current) return;
       setErrorMessage((err as Error).message || 'Backtest failed');
       setStatus('error');
     }
-  }, []);
+  }, [getWorker]);
 
   const reset = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
+    abortRef.current = true;
+    workerRef.current?.terminate();
+    workerRef.current = null;
     setResult(null);
     setStatus('idle');
     setErrorMessage(null);
