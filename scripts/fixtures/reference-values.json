@@ -96,7 +96,7 @@
     "site": "lazyportfolioetf.com",
     "url": "https://www.lazyportfolioetf.com/allocation/ray-dalio-all-weather/",
     "retrievedAt": "2026-05-05",
-    "description": "Ray Dalio All Weather 30-year view. IEI and DBC use non-blended proxies (US_10Y_TR, GOLD_SPOT). MaxDD may differ due to DBC proxy being gold-only instead of broad commodities.",
+    "description": "Ray Dalio All Weather 30-year view. IEI uses US_10Y_TR proxy. DBC uses COMMODITY_TR (FRED global commodity index + T-Bill collateral). MaxDD may differ due to proxy vs real DBC ETF differences (expense ratio, roll yield).",
     "parameters": {
       "startDate": "1996-05",
       "endDate": "2026-04",
@@ -182,7 +182,7 @@
     "site": "lazyportfolioetf.com",
     "url": "https://www.lazyportfolioetf.com/allocation/ray-dalio-all-weather/",
     "retrievedAt": "2026-05-05",
-    "description": "Ray Dalio All Weather 10-year view. DBC uses GOLD_SPOT proxy.",
+    "description": "Ray Dalio All Weather 10-year view. DBC uses COMMODITY_TR (FRED global commodity index + T-Bill collateral).",
     "parameters": {
       "startDate": "2016-05",
       "endDate": "2026-04",

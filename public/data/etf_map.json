@@ -909,7 +909,7 @@
     "provider": "Invesco",
     "expenseRatio": 0.0087,
     "inceptionDate": "2006-02-03",
-    "proxySymbol": "GOLD_SPOT"
+    "proxySymbol": "COMMODITY_TR"
   },
   {
     "symbol": "GSG",
@@ -921,7 +921,7 @@
     "provider": "BlackRock",
     "expenseRatio": 0.0075,
     "inceptionDate": "2006-07-10",
-    "proxySymbol": "GOLD_SPOT"
+    "proxySymbol": "COMMODITY_TR"
   },
   {
     "symbol": "DBMF",
@@ -933,7 +933,7 @@
     "provider": "iMGP",
     "expenseRatio": 0.0085,
     "inceptionDate": "2019-05-07",
-    "proxySymbol": "GOLD_SPOT"
+    "proxySymbol": "COMMODITY_TR"
   },
   {
     "symbol": "CAPE",

@@ -198,6 +198,15 @@ function main() {
     const prices = loadPriceSeries(entry.proxySymbol);
     assetPrices.set(h.asset.symbol, prices);
     const returns = computeMonthlyReturns(prices);
+
+    // Deduct expense ratio for non-blended proxy data
+    if (!entry.proxySymbol.endsWith('_BLENDED') && entry.expenseRatio > 0) {
+      const monthlyER = entry.expenseRatio / 12;
+      for (const rp of returns) {
+        if (rp.totalReturn !== null) rp.totalReturn -= monthlyER;
+      }
+    }
+
     assetReturnSeries.set(h.asset.symbol, returns);
   }
 

@@ -895,6 +895,67 @@ async function extendAllProxies(
   console.log(`\n   Summary: ${totalExtended} extended, ${totalSkipped} skipped`);
 }
 
+// ---------------------------------------------------------------------------
+// Broad Commodity Total Return (S&P GSCI proxy via FRED + T-Bill collateral)
+// ---------------------------------------------------------------------------
+
+function buildCommodityTR(
+  priceSeries: { date: string; value: number }[],
+  dtb3Series: { date: string; value: number }[],
+): { date: string; price: number }[] {
+  // Build DTB3 lookup keyed by YYYY-MM
+  const dtb3ByMonth = new Map<string, number>();
+  for (const pt of dtb3Series) {
+    dtb3ByMonth.set(pt.date.substring(0, 7), pt.value);
+  }
+
+  const result: { date: string; price: number }[] = [];
+  const startValue = 100;
+  let cumulative = startValue;
+
+  // First month: set starting value
+  const firstDate = priceSeries[0].date;
+  const firstYearMonth = firstDate.substring(0, 7);
+  const firstLastDay = new Date(
+    parseInt(firstDate.substring(0, 4)),
+    parseInt(firstDate.substring(5, 7)),
+    0,
+  ).getDate();
+  result.push({
+    date: `${firstYearMonth}-${String(firstLastDay).padStart(2, '0')}`,
+    price: Math.round(startValue * 10000) / 10000,
+  });
+
+  for (let i = 1; i < priceSeries.length; i++) {
+    const prevPrice = priceSeries[i - 1].value;
+    const currPrice = priceSeries[i].value;
+    if (prevPrice <= 0 || currPrice <= 0) continue;
+
+    // Monthly price return
+    const priceReturn = (currPrice - prevPrice) / prevPrice;
+
+    // T-Bill collateral return (annual percent → monthly decimal)
+    const yearMonth = priceSeries[i].date.substring(0, 7);
+    const dtb3Rate = dtb3ByMonth.get(yearMonth) ?? 0;
+    const collateralReturn = dtb3Rate / 1200;
+
+    const totalReturn = priceReturn + collateralReturn;
+    cumulative *= (1 + totalReturn);
+
+    const y = parseInt(priceSeries[i].date.substring(0, 4));
+    const m = parseInt(priceSeries[i].date.substring(5, 7));
+    const lastDay = new Date(y, m, 0).getDate();
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    result.push({
+      date: dateStr,
+      price: Math.round(cumulative * 10000) / 10000,
+    });
+  }
+
+  return result;
+}
+
 async function main() {
   console.log('Generating real historical proxy data from Shiller XLS...\n');
 
@@ -969,15 +1030,34 @@ async function main() {
   const goldData = buildCompleteGold(rows, yahooGold);
   writeCSV(path.join(DATA_DIR, 'proxies/commodity/gold_spot.csv'), goldData);
 
-  // 10. Extend all base proxy CSVs past Shiller data end (2023-09)
+  // 10. Build Broad Commodity TR (FRED PALLFNFINDEXM + T-Bill collateral)
+  console.log('10. Building Broad Commodity Total Return series...');
+  let commodityWritten = false;
+  try {
+    const commodityPrice = await fetchFredSeries('PALLFNFINDEXM', '1992-01-01', '2026-12-31');
+    console.log(`   Got ${commodityPrice.length} PALLFNFINDEXM data points (${commodityPrice[0]?.date} to ${commodityPrice[commodityPrice.length - 1]?.date})`);
+    if (commodityPrice.length > 0 && dtb3Series.length > 0) {
+      const commodity = buildCommodityTR(commodityPrice, dtb3Series);
+      writeCSV(path.join(DATA_DIR, 'proxies/commodity/commodity_tr.csv'), commodity);
+      console.log(`   Commodity TR: ${commodity[0].date} (${commodity[0].price}) → ${commodity[commodity.length - 1].date} (${commodity[commodity.length - 1].price})`);
+      commodityWritten = true;
+    }
+  } catch (err) {
+    console.log(`   FRED PALLFNFINDEXM unavailable: ${(err as Error).message}`);
+  }
+  if (!commodityWritten) {
+    console.log('   Falling back: commodity TR not available, DBC/GSG/DBMF will use GOLD_SPOT');
+  }
+
+  // 11. Extend all base proxy CSVs past Shiller data end (2023-09)
   await extendAllProxies(proxyOk, dtb3Series, fredCpiSeries);
 
-  // 11. Update etf_map.json to use the new proxies
-  console.log('\n11. Updating ETF mappings...');
+  // 12. Update etf_map.json to use the new proxies
+  console.log('\n12. Updating ETF mappings...');
   updateEtfMappings();
 
-  // 12. Update data_version.json
-  console.log('12. Updating data version...');
+  // 13. Update data_version.json
+  console.log('13. Updating data version...');
   const version = {
     version: 2,
     lastUpdated: new Date().toISOString().split('T')[0],
@@ -1014,6 +1094,9 @@ function updateEtfMappings(): void {
     'VO': 'SMALLCAP_VALUE_TR',
     'DES': 'SMALLCAP_VALUE_TR',
     'SAA': 'SMALLCAP_VALUE_TR',
+    'DBC': 'COMMODITY_TR',
+    'GSG': 'COMMODITY_TR',
+    'DBMF': 'COMMODITY_TR',
   };
 
   for (const entry of etfMap) {

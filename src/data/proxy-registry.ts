@@ -53,6 +53,20 @@ export async function resolvePortfolioReturns(
     // Convert prices to monthly returns
     const returnPoints = computeMonthlyReturns(pricePoints);
 
+    // Deduct expense ratio for non-blended proxy data.
+    // Blended CSVs (proxySymbol ending in _BLENDED) use real ETF prices
+    // that already reflect ER in the NAV. Proxy-only data is index-level
+    // and needs ER deducted to match real ETF returns.
+    const isBlended = entry.proxySymbol.endsWith('_BLENDED');
+    if (!isBlended && entry.expenseRatio > 0) {
+      const monthlyER = entry.expenseRatio / 12;
+      for (const rp of returnPoints) {
+        if (rp.totalReturn !== null) {
+          rp.totalReturn -= monthlyER;
+        }
+      }
+    }
+
     result.set(symbol, returnPoints);
   }
 
