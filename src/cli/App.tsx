@@ -1203,7 +1203,7 @@ function CompareResultsView({ results, tab, currency, height }: {
       {tab === 'chart' && (
         <Box flexDirection="column">
           {(() => {
-            const width = Math.min((process.stdout.columns || 80) - 15, 100);
+            const width = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
             const chartH = Math.max(height - 10, 8);
             const colors = [asciichart.cyan, asciichart.yellow, asciichart.green, asciichart.magenta];
             const series = results.map((r) => {
@@ -1296,7 +1296,7 @@ function MetricsPanel({ metrics, currency }: { metrics: BacktestResult['metrics'
 function ChartPanel({ timeSeries, height }: { timeSeries: BacktestResult['timeSeries']; height: number }) {
   if (timeSeries.length === 0) return <Text dimColor>No data</Text>;
 
-  const width = Math.min((process.stdout.columns || 80) - 15, 120);
+  const width = (process.stdout.columns || 80) - Y_AXIS_OFFSET - 2;
   const chartHeight = Math.max(height - 6, 8);
   const values = timeSeries.map((p) => p.portfolioValue);
   const dates = timeSeries.map((p) => p.date);
