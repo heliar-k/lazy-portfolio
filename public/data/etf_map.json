@@ -9,7 +9,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0003,
     "inceptionDate": "2001-05-24",
-    "proxySymbol": "SP500_TR"
+    "proxySymbol": "VTI_BLENDED"
   },
   {
     "symbol": "VOO",
@@ -693,7 +693,7 @@
     "provider": "State Street",
     "expenseRatio": 0.0014,
     "inceptionDate": "2007-05-25",
-    "proxySymbol": "CASH"
+    "proxySymbol": "BIL_BLENDED"
   },
   {
     "symbol": "TIP",
@@ -849,7 +849,7 @@
     "provider": "State Street",
     "expenseRatio": 0.004,
     "inceptionDate": "2004-11-18",
-    "proxySymbol": "GOLD_SPOT"
+    "proxySymbol": "GLD_BLENDED"
   },
   {
     "symbol": "GLTR",
@@ -1185,7 +1185,7 @@
     "provider": "iShares",
     "expenseRatio": 0.0003,
     "inceptionDate": "2003-09-22",
-    "proxySymbol": "US_AGG_BOND_TR"
+    "proxySymbol": "AGG_BLENDED"
   },
   {
     "symbol": "IAU",

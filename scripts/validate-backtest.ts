@@ -1,362 +1,397 @@
 /**
- * Backtest Cross-Validation Suite — M3 of Data Pipeline Improvement Plan.
+ * Cross-validation script: compares our backtest engine output against
+ * reference values from lazyportfolioetf.com and other sources.
  *
- * Runs known-good backtests and compares against baseline values to catch
- * regressions when engine logic or proxy data changes.
+ * Usage:
+ *   npx tsx scripts/validate-backtest.ts              # Run all test cases
+ *   npx tsx scripts/validate-backtest.ts --case=0     # Run single case by index
+ *   npx tsx scripts/validate-backtest.ts --verbose    # Print monthly differences
  *
- * Usage: npx tsx scripts/validate-backtest.ts
+ * Reference values are stored in scripts/fixtures/reference-values.json.
+ * To update references: manually extract values from the reference website,
+ * edit the JSON file, and update the `retrievedAt` field.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { runBacktest } from '../src/engine/backtest';
+import { computeMonthlyReturns } from '../src/engine/returns';
+import type {
+  BacktestParameters,
+  MonthlyReturnPoint,
+  MonthlyPricePoint,
+  PortfolioHolding,
+  AssetIdentifier,
+} from '../src/engine/types';
+
+const DATA_DIR = path.resolve('public/data');
+const FIXTURES_PATH = path.resolve('scripts/fixtures/reference-values.json');
 
 // ---------------------------------------------------------------------------
-// Minimal engine (same as verify-engine.ts)
+// Tolerances (from plan)
 // ---------------------------------------------------------------------------
 
-interface PricePoint {
-  date: string;
-  price: number;
+const TOL: Record<string, number> = {
+  cagr: 0.003,
+  stdDevAnnualized: 0.007,
+  maxDrawdown: 0.02,
+  finalCapital: 0.05,
+  totalReturn: 0.05,
+  annualReturn: 0.02,
+};
+
+// ---------------------------------------------------------------------------
+// Reference fixture types
+// ---------------------------------------------------------------------------
+
+interface ReferenceCase {
+  site: string;
+  url: string;
+  retrievedAt: string;
+  parameters: {
+    startDate: string;
+    endDate: string;
+    initialCapital: number;
+    rebalancing: { type: 'calendar'; frequency: 'monthly' | 'quarterly' | 'annual' };
+    inflationAdjusted: boolean;
+    displayCurrency: string;
+  };
+  holdings: { symbol: string; targetWeight: number }[];
+  metrics: {
+    finalCapital?: number;
+    totalReturn?: number;
+    cagr: number;
+    stdDevAnnualized?: number;
+    maxDrawdown?: number;
+  };
+  annualReturns?: Record<string, number>;
 }
 
-function loadCSV(filePath: string): PricePoint[] {
+// ---------------------------------------------------------------------------
+// Data loading (disk-based, no browser fetch)
+// ---------------------------------------------------------------------------
+
+interface EtfMapEntry {
+  symbol: string;
+  proxySymbol: string;
+  name: string;
+  assetClass: string;
+  region: string;
+  currency: string;
+  provider: string;
+  expenseRatio: number;
+  inceptionDate: string;
+}
+
+function loadEtfMap(): EtfMapEntry[] {
+  return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'etf_map.json'), 'utf-8'));
+}
+
+function findProxyFile(proxySymbol: string): string | null {
+  const key = proxySymbol.toLowerCase();
+  const dirs = ['equity', 'bond', 'real_estate', 'commodity'];
+  for (const dir of dirs) {
+    const p = path.join(DATA_DIR, 'proxies', dir, `${key}.csv`);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function loadPriceSeries(proxySymbol: string): MonthlyPricePoint[] {
+  const filePath = findProxyFile(proxySymbol);
+  if (!filePath) throw new Error(`Proxy data not found for: ${proxySymbol}`);
   const text = fs.readFileSync(filePath, 'utf-8');
   const lines = text.trim().split('\n');
-  return lines.slice(1).map(line => {
-    const [date, price] = line.split(',');
-    return { date, price: parseFloat(price) };
-  });
+  const points: MonthlyPricePoint[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const [date, priceStr] = lines[i].split(',');
+    const price = parseFloat(priceStr);
+    if (date && !isNaN(price)) points.push({ date, price });
+  }
+  return points;
 }
 
-function computeMonthlyReturns(prices: PricePoint[]): Map<string, number | null> {
-  const map = new Map<string, number | null>();
-  for (let i = 0; i < prices.length; i++) {
-    if (i === 0) {
-      map.set(prices[i].date, null);
-    } else {
-      const prev = prices[i - 1].price;
-      const curr = prices[i].price;
-      map.set(prices[i].date, prev > 0 ? (curr - prev) / prev : null);
-    }
+function loadCpiSeries(): Map<string, number> {
+  const filePath = path.join(DATA_DIR, 'inflation/us_cpi.csv');
+  if (!fs.existsSync(filePath)) return new Map();
+  const text = fs.readFileSync(filePath, 'utf-8');
+  const lines = text.trim().split('\n');
+  const map = new Map<string, number>();
+  for (let i = 1; i < lines.length; i++) {
+    const [date, valueStr] = lines[i].split(',');
+    const value = parseFloat(valueStr);
+    if (date && !isNaN(value)) map.set(date, value);
   }
   return map;
 }
 
-function buildMonthGrid(startDate: string, endDate: string): string[] {
-  const start = new Date(startDate + '-01');
-  const end = new Date(endDate + '-01');
-  const months: string[] = [];
-  const current = new Date(start);
-  while (current <= end) {
-    const y = current.getFullYear();
-    const m = String(current.getMonth() + 1).padStart(2, '0');
-    const lastDay = new Date(y, current.getMonth() + 1, 0).getDate();
-    months.push(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
-    current.setMonth(current.getMonth() + 1);
-  }
-  return months;
-}
-
-function alignedReturns(
-  monthlyReturns: Map<string, number | null>,
-  monthGrid: string[],
-): (number | null)[] {
-  return monthGrid.map(date => {
-    const r = monthlyReturns.get(date);
-    return r !== undefined ? r : null;
-  });
-}
-
-interface Holding {
-  targetWeight: number;
-  expenseRatio: number;
-}
-
-interface BacktestResult {
-  cagr: number;
-  stdDev: number;
-  maxDD: number;
-  finalCapital: number;
-}
-
-function runBacktest(
-  holdings: Holding[],
-  monthlyReturnsList: (number | null)[][],
-  months: string[],
-  initialCapital: number,
-  rebalanceFrequency: 'monthly' | 'annual',
-): BacktestResult {
-  const nAssets = holdings.length;
-  const nMonths = months.length;
-
-  if (nAssets === 0 || nMonths === 0) {
-    return { cagr: 0, stdDev: 0, maxDD: 0, finalCapital: 0 };
-  }
-
-  const targetWeights = holdings.map(h => h.targetWeight);
-  const assetValues = targetWeights.map(w => w * initialCapital);
-  const portfolioValues: number[] = [initialCapital];
-
-  for (let m = 1; m < nMonths; m++) {
-    let shouldRebalance = false;
-    if (rebalanceFrequency === 'annual') {
-      const date = new Date(months[m]);
-      shouldRebalance = date.getMonth() === 0 && m > 0;
-    }
-
-    if (shouldRebalance) {
-      const totalValue = assetValues.reduce((a, b) => a + b, 0);
-      for (let a = 0; a < nAssets; a++) {
-        assetValues[a] = totalValue * targetWeights[a];
-      }
-    }
-
-    let totalValue = 0;
-    const newValues: number[] = [];
-    for (let a = 0; a < nAssets; a++) {
-      const ret = monthlyReturnsList[a]?.[m] ?? 0;
-      const fee = (holdings[a].expenseRatio / 12) * assetValues[a];
-      const newVal = assetValues[a] * (1 + ret) - fee;
-      newValues.push(Math.max(0, newVal));
-      totalValue += Math.max(0, newVal);
-    }
-
-    for (let a = 0; a < nAssets; a++) {
-      assetValues[a] = newValues[a];
-    }
-
-    portfolioValues.push(totalValue);
-  }
-
-  const monthlyPortfolioReturns: number[] = [];
-  for (let i = 1; i < portfolioValues.length; i++) {
-    if (portfolioValues[i - 1] > 0) {
-      monthlyPortfolioReturns.push(
-        (portfolioValues[i] - portfolioValues[i - 1]) / portfolioValues[i - 1],
-      );
-    }
-  }
-
-  const years = (nMonths - 1) / 12;
-  const cagr =
-    years > 0 && portfolioValues[0] > 0
-      ? Math.pow(portfolioValues[portfolioValues.length - 1] / portfolioValues[0], 1 / years) - 1
-      : 0;
-
-  const n = monthlyPortfolioReturns.length;
-  const meanReturn = n > 0 ? monthlyPortfolioReturns.reduce((a, b) => a + b, 0) / n : 0;
-  const variance =
-    n > 1
-      ? monthlyPortfolioReturns.reduce((sum, r) => sum + (r - meanReturn) ** 2, 0) / (n - 1)
-      : 0;
-  const stdDev = Math.sqrt(variance) * Math.sqrt(12);
-
-  let peak = portfolioValues[0];
-  let maxDD = 0;
-  for (const v of portfolioValues) {
-    if (v > peak) peak = v;
-    const dd = peak > 0 ? (v - peak) / peak : 0;
-    if (dd < maxDD) maxDD = dd;
-  }
-
-  return {
-    cagr,
-    stdDev,
-    maxDD,
-    finalCapital: portfolioValues[portfolioValues.length - 1],
-  };
-}
-
 // ---------------------------------------------------------------------------
-// Data loading
+// Test runner
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.resolve('public/data');
-
-function loadProxy(proxySymbol: string): Map<string, number | null> {
-  const dirs = ['equity', 'bond', 'real_estate', 'commodity'];
-  for (const dir of dirs) {
-    const filePath = path.join(DATA_DIR, 'proxies', dir, `${proxySymbol.toLowerCase()}.csv`);
-    if (fs.existsSync(filePath)) {
-      const prices = loadCSV(filePath);
-      return computeMonthlyReturns(prices);
-    }
-  }
-  throw new Error(`Proxy not found: ${proxySymbol}`);
-}
-
-// ---------------------------------------------------------------------------
-// Baseline values (recorded from current correct engine output)
-// These are used as regression targets — if the engine changes, these break.
-// ---------------------------------------------------------------------------
-
-interface Baseline {
-  cagr: number;
-  stdDev: number;
-  maxDD: number;
-}
-
-const BASELINES: Record<string, { range: string; values: Baseline }> = {
-  '100% SPY (2016-04 to 2023-09)': {
-    range: '2016-04_to_2023-09',
-    values: { cagr: 0.1294, stdDev: 0.1238, maxDD: -0.1928 },
-  },
-  '60/40 VTI/BND (2016-04 to 2023-09)': {
-    range: '2016-04_to_2023-09',
-    values: { cagr: 0.0768, stdDev: 0.0759, maxDD: -0.1813 },
-  },
-  'Permanent Port. (2016-04 to 2023-09)': {
-    range: '2016-04_to_2023-09',
-    values: { cagr: 0.0406, stdDev: 0.0590, maxDD: -0.1559 },
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-interface CheckResult {
+interface MetricCheck {
   name: string;
-  metric: string;
-  actual: number;
-  expected: number;
-  delta: number;
+  ours: number;
+  ref: number;
+  tolerance: number;
   passed: boolean;
 }
 
-const TOLERANCES = {
-  cagr: 0.001,    // ±0.1pp — tight, compounding errors are serious
-  stdDev: 0.002,   // ±0.2pp
-  maxDD: 0.005,    // ±0.5pp
-};
-
-function pct(n: number): string {
-  return (n * 100).toFixed(2) + '%';
+function inTolerance(ours: number, ref: number, tol: number): boolean {
+  return Math.abs(ours - ref) <= tol;
 }
 
-function pp(n: number): string {
-  return (n * 100).toFixed(3) + ' pp';
+function runSingleCase(refCase: ReferenceCase, etfMap: EtfMapEntry[], cpiSeries: Map<string, number>): {
+  passed: boolean;
+  checks: MetricCheck[];
+  error?: string;
+} {
+  const etfBySymbol = new Map(etfMap.map(e => [e.symbol, e]));
+
+  // Build holdings
+  const holdings: PortfolioHolding[] = [];
+  for (const h of refCase.holdings) {
+    const entry = etfBySymbol.get(h.symbol);
+    if (!entry) {
+      return { passed: false, checks: [], error: `ETF "${h.symbol}" not in etf_map.json` };
+    }
+    holdings.push({
+      asset: {
+        symbol: entry.symbol,
+        name: entry.name,
+        assetClass: entry.assetClass as AssetIdentifier['assetClass'],
+        region: entry.region as AssetIdentifier['region'],
+        currency: entry.currency,
+        provider: entry.provider,
+        expenseRatio: entry.expenseRatio,
+        inceptionDate: entry.inceptionDate,
+      },
+      targetWeight: h.targetWeight,
+    });
+  }
+
+  // Load return series for each holding
+  const assetReturnSeries = new Map<string, MonthlyReturnPoint[]>();
+  for (const h of holdings) {
+    const entry = etfBySymbol.get(h.asset.symbol)!;
+    if (!entry.proxySymbol) {
+      return { passed: false, checks: [], error: `ETF "${h.asset.symbol}" has no proxy` };
+    }
+    const prices = loadPriceSeries(entry.proxySymbol);
+    const returns = computeMonthlyReturns(prices);
+    assetReturnSeries.set(h.asset.symbol, returns);
+  }
+
+  // Build parameters
+  const params: BacktestParameters = {
+    portfolio: { id: '', name: refCase.site, holdings, tags: [] },
+    startDate: refCase.parameters.startDate,
+    endDate: refCase.parameters.endDate,
+    initialCapital: refCase.parameters.initialCapital,
+    displayCurrency: refCase.parameters.displayCurrency as BacktestParameters['displayCurrency'],
+    inflationRegion: 'US',
+    inflationAdjusted: refCase.parameters.inflationAdjusted,
+    rebalancing: refCase.parameters.rebalancing,
+    cashflows: [],
+  };
+
+  // Run backtest
+  const result = runBacktest(params, assetReturnSeries, new Map(), cpiSeries);
+
+  // Compare metrics
+  const checks: MetricCheck[] = [];
+  const ref = refCase.metrics;
+
+  checks.push({
+    name: 'CAGR',
+    ours: result.metrics.cagr,
+    ref: ref.cagr,
+    tolerance: TOL.cagr,
+    passed: inTolerance(result.metrics.cagr, ref.cagr, TOL.cagr),
+  });
+
+  if (ref.stdDevAnnualized !== undefined) {
+    checks.push({
+      name: 'StdDev',
+      ours: result.metrics.stdDevAnnualized,
+      ref: ref.stdDevAnnualized,
+      tolerance: TOL.stdDevAnnualized,
+      passed: inTolerance(result.metrics.stdDevAnnualized, ref.stdDevAnnualized, TOL.stdDevAnnualized),
+    });
+  }
+
+  if (ref.maxDrawdown !== undefined) {
+    checks.push({
+      name: 'MaxDD',
+      ours: result.metrics.maxDrawdown,
+      ref: ref.maxDrawdown,
+      tolerance: TOL.maxDrawdown,
+      passed: inTolerance(result.metrics.maxDrawdown, ref.maxDrawdown, TOL.maxDrawdown),
+    });
+  }
+
+  if (ref.finalCapital !== undefined) {
+    const oursFinal = result.timeSeries[result.timeSeries.length - 1]?.portfolioValue ?? 0;
+    const ratio = oursFinal / ref.finalCapital;
+    checks.push({
+      name: 'FinalCapital',
+      ours: oursFinal,
+      ref: ref.finalCapital,
+      tolerance: TOL.finalCapital,
+      passed: Math.abs(ratio - 1) <= TOL.finalCapital,
+    });
+  }
+
+  if (ref.totalReturn !== undefined) {
+    checks.push({
+      name: 'TotalReturn',
+      ours: result.metrics.totalReturn,
+      ref: ref.totalReturn,
+      tolerance: TOL.totalReturn,
+      passed: inTolerance(result.metrics.totalReturn, ref.totalReturn, TOL.totalReturn),
+    });
+  }
+
+  // Annual return spot checks
+  if (refCase.annualReturns) {
+    const annualMap = new Map<string, number>();
+    for (const ap of result.annualReturns) {
+      annualMap.set(String(ap.year), ap.return_);
+    }
+    for (const [year, refReturn] of Object.entries(refCase.annualReturns)) {
+      const oursReturn = annualMap.get(year);
+      if (oursReturn !== undefined) {
+        checks.push({
+          name: `Annual ${year}`,
+          ours: oursReturn,
+          ref: refReturn,
+          tolerance: TOL.annualReturn,
+          passed: inTolerance(oursReturn, refReturn, TOL.annualReturn),
+        });
+      }
+    }
+  }
+
+  const passed = checks.every(c => c.passed);
+  return { passed, checks };
 }
 
-function checkBaseline(
-  name: string,
-  expected: Baseline,
-  actual: BacktestResult,
-): CheckResult[] {
-  return [
-    {
-      name,
-      metric: 'CAGR',
-      actual: actual.cagr,
-      expected: expected.cagr,
-      delta: Math.abs(actual.cagr - expected.cagr),
-      passed: Math.abs(actual.cagr - expected.cagr) <= TOLERANCES.cagr,
-    },
-    {
-      name,
-      metric: 'StdDev',
-      actual: actual.stdDev,
-      expected: expected.stdDev,
-      delta: Math.abs(actual.stdDev - expected.stdDev),
-      passed: Math.abs(actual.stdDev - expected.stdDev) <= TOLERANCES.stdDev,
-    },
-    {
-      name,
-      metric: 'MaxDD',
-      actual: actual.maxDD,
-      expected: expected.maxDD,
-      delta: Math.abs(actual.maxDD - expected.maxDD),
-      passed: Math.abs(actual.maxDD - expected.maxDD) <= TOLERANCES.maxDD,
-    },
-  ];
+// ---------------------------------------------------------------------------
+// Output formatting
+// ---------------------------------------------------------------------------
+
+function fmtPct(v: number): string {
+  return `${(v * 100).toFixed(2)}%`;
+}
+
+function fmtMoney(v: number): string {
+  return `$${Math.round(v).toLocaleString('en-US')}`;
+}
+
+function printCheck(check: MetricCheck): string {
+  const status = check.passed ? '✅' : '❌';
+  let oursStr: string;
+  let refStr: string;
+  if (check.name === 'FinalCapital') {
+    oursStr = fmtMoney(check.ours);
+    refStr = fmtMoney(check.ref);
+  } else {
+    oursStr = fmtPct(check.ours);
+    refStr = fmtPct(check.ref);
+  }
+  const delta = check.name === 'FinalCapital'
+    ? `${((check.ours / check.ref - 1) * 100).toFixed(1)}%`
+    : `${((check.ours - check.ref) * 100).toFixed(2)}pp`;
+  return `  ${check.name.padEnd(14)} ${oursStr.padStart(8)}  (ref: ${refStr.padStart(8)}, Δ=${delta.padStart(8)})  ${status}`;
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-console.log('╔══════════════════════════════════════════╗');
-console.log('║   Backtest Cross-Validation — M3       ║');
-console.log('╚══════════════════════════════════════════╝\n');
+function main() {
+  const args = process.argv.slice(2);
+  const verbose = args.includes('--verbose');
+  const caseArg = args.find(a => a.startsWith('--case='));
+  const singleIndex = caseArg ? parseInt(caseArg.split('=')[1], 10) : undefined;
 
-// Test range
-const startDate = '2016-04';
-const endDate = '2023-09';
-const months = buildMonthGrid(startDate, endDate);
-console.log(`Test period: ${startDate} to ${endDate} (${months.length} months)\n`);
-
-// Load proxy returns
-const sp500Returns = loadProxy('SP500_TR');
-const bondReturns = loadProxy('US_AGG_BOND_TR');
-const tltReturns = loadProxy('US_LONG_TR');
-const gldReturns = loadProxy('GOLD_SPOT');
-const shyReturns = loadProxy('CASH');
-
-const spyAligned = alignedReturns(sp500Returns, months);
-const bndAligned = alignedReturns(bondReturns, months);
-const tltAligned = alignedReturns(tltReturns, months);
-const gldAligned = alignedReturns(gldReturns, months);
-const shyAligned = alignedReturns(shyReturns, months);
-
-// Test A: 100% SPY
-const resultA = runBacktest(
-  [{ targetWeight: 1.0, expenseRatio: 0.0003 }],
-  [spyAligned],
-  months, 10000, 'annual',
-);
-
-// Test B: 60/40 VTI/BND
-const resultB = runBacktest(
-  [
-    { targetWeight: 0.60, expenseRatio: 0.0003 },
-    { targetWeight: 0.40, expenseRatio: 0.0003 },
-  ],
-  [spyAligned, bndAligned],
-  months, 10000, 'annual',
-);
-
-// Test C: Permanent Portfolio
-const resultC = runBacktest(
-  [
-    { targetWeight: 0.25, expenseRatio: 0.0003 },
-    { targetWeight: 0.25, expenseRatio: 0.0015 },
-    { targetWeight: 0.25, expenseRatio: 0.0040 },
-    { targetWeight: 0.25, expenseRatio: 0.0015 },
-  ],
-  [spyAligned, tltAligned, gldAligned, shyAligned],
-  months, 10000, 'annual',
-);
-
-const actuals: Record<string, BacktestResult> = {
-  '100% SPY (2016-04 to 2023-09)': resultA,
-  '60/40 VTI/BND (2016-04 to 2023-09)': resultB,
-  'Permanent Port. (2016-04 to 2023-09)': resultC,
-};
-
-// Run checks
-const allChecks: CheckResult[] = [];
-for (const [name, baseline] of Object.entries(BASELINES)) {
-  const actual = actuals[name];
-  const checks = checkBaseline(name, baseline.values, actual);
-
-  console.log(`${name}:`);
-  for (const c of checks) {
-    const status = c.passed ? '✅' : '❌';
-    console.log(`  ${c.metric}: actual=${pct(c.actual)} expected=${pct(c.expected)} Δ=${pp(c.delta)} ${status}`);
-    allChecks.push(c);
+  if (!fs.existsSync(FIXTURES_PATH)) {
+    console.error(`Reference fixtures not found: ${FIXTURES_PATH}`);
+    console.log('Create the file with reference values from lazyportfolioetf.com to enable validation.');
+    process.exit(1);
   }
-  console.log();
+
+  console.log('=== Cross-Validation ===\n');
+
+  // Load data
+  console.log('Loading data...');
+  const etfMap = loadEtfMap();
+  console.log(`  ETF map: ${etfMap.length} entries`);
+  const cpiSeries = loadCpiSeries();
+  console.log(`  CPI: ${cpiSeries.size} data points\n`);
+
+  // Load test cases
+  const cases: ReferenceCase[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, 'utf-8'));
+
+  const indices = singleIndex !== undefined
+    ? [singleIndex]
+    : cases.map((_, i) => i);
+
+  let totalPassed = 0;
+  let totalFailed = 0;
+
+  for (const idx of indices) {
+    if (idx < 0 || idx >= cases.length) {
+      console.error(`Invalid case index: ${idx} (0-${cases.length - 1})`);
+      continue;
+    }
+
+    const refCase = cases[idx];
+    console.log(`Case ${idx}: ${refCase.site} — ${refCase.parameters.startDate} to ${refCase.parameters.endDate}`);
+    console.log(`  Holdings: ${refCase.holdings.map(h => `${h.symbol} ${(h.targetWeight * 100).toFixed(0)}%`).join(', ')}`);
+    console.log(`  Inflation adjusted: ${refCase.parameters.inflationAdjusted}`);
+    console.log(`  Reference retrieved: ${refCase.retrievedAt}`);
+
+    const { passed, checks, error } = runSingleCase(refCase, etfMap, cpiSeries);
+
+    if (error) {
+      console.log(`  ❌ Error: ${error}\n`);
+      totalFailed++;
+      continue;
+    }
+
+    for (const check of checks) {
+      console.log(printCheck(check));
+    }
+
+    if (passed) {
+      console.log(`  ✅ PASSED (${checks.filter(c => c.passed).length}/${checks.length})`);
+      totalPassed++;
+    } else {
+      console.log(`  ❌ FAILED (${checks.filter(c => c.passed).length}/${checks.length})`);
+      if (verbose) {
+        for (const check of checks.filter(c => !c.passed)) {
+          console.log(`     → ${check.name}: expected ~${fmtPct(check.ref)}, got ${fmtPct(check.ours)}`);
+        }
+      }
+      totalFailed++;
+    }
+
+    console.log();
+  }
+
+  // Summary
+  console.log('═══════════════════════════════════════');
+  console.log(`Cases:  ${totalPassed + totalFailed} total, ${totalPassed} passed, ${totalFailed} failed`);
+  if (totalFailed > 0) {
+    console.log('\nReview failed checks above. Common causes:');
+    console.log('  - Stale proxy data: run `npm run update-data`');
+    console.log('  - Proxy unavailable: Yahoo Finance data not fetched');
+    console.log('  - Reference values outdated: update fixtures/reference-values.json');
+    process.exit(1);
+  } else {
+    console.log('All validations passed.');
+  }
 }
 
-// Summary
-const failures = allChecks.filter(c => !c.passed);
-if (failures.length === 0) {
-  console.log('✅ All checks passed. Engine and data are consistent with baseline.');
-} else {
-  console.log(`❌ ${failures.length} check(s) failed:`);
-  for (const f of failures) {
-    console.log(`   ${f.name} / ${f.metric}: actual=${pct(f.actual)} expected=${pct(f.expected)} Δ=${pp(f.delta)}`);
-  }
-  console.log('\n⚠️  Engine or data regression detected. Review recent changes.');
-  process.exit(1);
-}
+main();

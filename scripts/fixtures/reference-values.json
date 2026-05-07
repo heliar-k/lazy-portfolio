@@ -1,0 +1,54 @@
+[
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/harry-browne-permanent/",
+    "retrievedAt": "2026-05-04",
+    "parameters": {
+      "startDate": "1996-05",
+      "endDate": "2026-04",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "VTI", "targetWeight": 0.25 },
+      { "symbol": "BIL", "targetWeight": 0.25 },
+      { "symbol": "TLT", "targetWeight": 0.25 },
+      { "symbol": "GLD", "targetWeight": 0.25 }
+    ],
+    "metrics": {
+      "finalCapital": 83700,
+      "totalReturn": 7.37,
+      "cagr": 0.0734,
+      "stdDevAnnualized": 0.0699,
+      "maxDrawdown": -0.1601
+    },
+    "annualReturns": {
+      "2008": 0.00,
+      "2009": 0.12,
+      "2022": -0.12
+    }
+  },
+  {
+    "site": "lazyportfolioetf.com",
+    "url": "https://www.lazyportfolioetf.com/allocation/spy/",
+    "retrievedAt": "2026-05-04",
+    "parameters": {
+      "startDate": "2015-01",
+      "endDate": "2024-12",
+      "initialCapital": 10000,
+      "rebalancing": { "type": "calendar", "frequency": "annual" },
+      "inflationAdjusted": false,
+      "displayCurrency": "USD"
+    },
+    "holdings": [
+      { "symbol": "SPY", "targetWeight": 1.0 }
+    ],
+    "metrics": {
+      "cagr": 0.131,
+      "stdDevAnnualized": 0.152,
+      "maxDrawdown": -0.238
+    }
+  }
+]

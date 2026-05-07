@@ -51,6 +51,30 @@ const BLEND_CONFIGS: BlendConfig[] = [
     outputFile: 'bond/shy_blended.csv',
     proxySymbol: 'CASH',
   },
+  {
+    symbol: 'VTI',
+    proxyFile: 'equity/sp500_tr.csv',
+    outputFile: 'equity/vti_blended.csv',
+    proxySymbol: 'SP500_TR',
+  },
+  {
+    symbol: 'BIL',
+    proxyFile: 'bond/cash.csv',
+    outputFile: 'bond/bil_blended.csv',
+    proxySymbol: 'CASH',
+  },
+  {
+    symbol: 'GLD',
+    proxyFile: 'commodity/gold_spot.csv',
+    outputFile: 'commodity/gld_blended.csv',
+    proxySymbol: 'GOLD_SPOT',
+  },
+  {
+    symbol: 'AGG',
+    proxyFile: 'bond/us_agg_bond_tr.csv',
+    outputFile: 'bond/agg_blended.csv',
+    proxySymbol: 'US_AGG_BOND_TR',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -168,11 +192,13 @@ function blendSeries(
     }
   }
 
-  // Append any ETF data past the end of proxy data
+  // Append any ETF data past the end of proxy data (avoid duplicate dates)
+  const existingDates = new Set(result.map(p => p.date));
   const lastProxyDate = proxyData[proxyData.length - 1].date;
   for (const etf of etfData) {
-    if (etf.date > lastProxyDate) {
+    if (etf.date > lastProxyDate && !existingDates.has(etf.date)) {
       result.push(etf);
+      existingDates.add(etf.date);
     }
   }
 
@@ -257,6 +283,10 @@ async function main() {
     'TLT': 'TLT_BLENDED',
     'BND': 'BND_BLENDED',
     'SHY': 'SHY_BLENDED',
+    'VTI': 'VTI_BLENDED',
+    'BIL': 'BIL_BLENDED',
+    'GLD': 'GLD_BLENDED',
+    'AGG': 'AGG_BLENDED',
   };
 
   let updated = 0;

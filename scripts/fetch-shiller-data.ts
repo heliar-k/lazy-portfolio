@@ -23,6 +23,74 @@ const DATA_DIR = path.resolve('public/data');
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ---------------------------------------------------------------------------
+// Step 0: Backup
+// ---------------------------------------------------------------------------
+
+interface BackupState {
+  etfMap: boolean;
+  proxies: boolean;
+}
+
+function createBackup(): BackupState {
+  console.log('\n[0/5] Creating backups...');
+  const result: BackupState = { etfMap: false, proxies: false };
+
+  const etfMapPath = path.join(DATA_DIR, 'etf_map.json');
+  const etfMapBak = path.join(DATA_DIR, 'etf_map.json.bak');
+  if (fs.existsSync(etfMapPath)) {
+    fs.copyFileSync(etfMapPath, etfMapBak);
+    result.etfMap = true;
+  }
+
+  const proxiesDir = path.join(DATA_DIR, 'proxies');
+  const proxiesBak = '/tmp/proxies_backup';
+  if (fs.existsSync(proxiesDir)) {
+    fs.cpSync(proxiesDir, proxiesBak, { recursive: true });
+    result.proxies = true;
+  }
+
+  console.log(`   etf_map.json: ${result.etfMap ? 'backed up' : 'not found'}`);
+  console.log(`   proxies/: ${result.proxies ? 'backed up' : 'not found'}`);
+  return result;
+}
+
+function restoreFromBackup(backup: BackupState): void {
+  console.log('\n⚠️  Restoring from backups...');
+
+  if (backup.etfMap) {
+    const etfMapPath = path.join(DATA_DIR, 'etf_map.json');
+    const etfMapBak = path.join(DATA_DIR, 'etf_map.json.bak');
+    if (fs.existsSync(etfMapBak)) {
+      fs.copyFileSync(etfMapBak, etfMapPath);
+      fs.unlinkSync(etfMapBak);
+      console.log('   Restored etf_map.json');
+    }
+  }
+
+  if (backup.proxies) {
+    const proxiesDir = path.join(DATA_DIR, 'proxies');
+    const proxiesBak = '/tmp/proxies_backup';
+    if (fs.existsSync(proxiesBak)) {
+      fs.rmSync(proxiesDir, { recursive: true, force: true });
+      fs.cpSync(proxiesBak, proxiesDir, { recursive: true });
+      fs.rmSync(proxiesBak, { recursive: true, force: true });
+      console.log('   Restored proxies/');
+    }
+  }
+}
+
+function cleanupBackup(backup: BackupState): void {
+  if (backup.etfMap) {
+    const bak = path.join(DATA_DIR, 'etf_map.json.bak');
+    if (fs.existsSync(bak)) fs.unlinkSync(bak);
+  }
+  if (backup.proxies) {
+    const bak = '/tmp/proxies_backup';
+    if (fs.existsSync(bak)) fs.rmSync(bak, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step 1: Download Shiller data if needed
 // ---------------------------------------------------------------------------
 
@@ -143,65 +211,68 @@ async function main() {
 
   const startTime = Date.now();
 
-  // 1. Download Shiller data if needed
-  console.log('[1/4] Shiller data:');
-  if (shillerNeedsUpdate()) {
-    try {
-      await downloadShiller();
-    } catch (err) {
-      console.error(`Download failed: ${(err as Error).message}`);
-      console.log('Using existing Shiller data if available...');
-      if (!fs.existsSync(SHILLER_PATH)) {
-        console.error('No Shiller data available. Aborting.');
-        process.exit(1);
+  // 0. Backup
+  const backup = createBackup();
+
+  try {
+    // 1. Download Shiller data if needed
+    console.log('\n[1/5] Shiller data:');
+    if (shillerNeedsUpdate()) {
+      try {
+        await downloadShiller();
+      } catch (err) {
+        console.error(`Download failed: ${(err as Error).message}`);
+        console.log('Using existing Shiller data if available...');
+        if (!fs.existsSync(SHILLER_PATH)) {
+          throw new Error('No Shiller data available.');
+        }
       }
     }
-  }
 
-  // 2. Generate proxy CSVs from Shiller + FRED
-  console.log('\n[2/5] Generating proxy data from Shiller + FRED...');
-  if (!runScript('scripts/generate-real-proxies.ts', 'Shiller + FRED proxies')) {
-    console.error('Proxy generation failed. Aborting.');
-    process.exit(1);
-  }
+    // 2. Generate proxy CSVs from Shiller + FRED
+    console.log('\n[2/5] Generating proxy data from Shiller + FRED...');
+    if (!runScript('scripts/generate-real-proxies.ts', 'Shiller + FRED proxies')) {
+      throw new Error('Proxy generation failed.');
+    }
 
-  // 2b. Blend ETF data on top (top ETFs get real Yahoo Finance prices post-inception)
-  console.log('\n[3/5] Blending ETF data...');
-  runScript('scripts/blend-etf-data.ts', 'ETF data blending');
+    // 3. Blend ETF data on top (top ETFs get real Yahoo Finance prices post-inception)
+    console.log('\n[3/5] Blending ETF data...');
+    runScript('scripts/blend-etf-data.ts', 'ETF data blending');
 
-  // 3. Generate international proxies from Ken French
-  console.log('\n[4/5] International equity proxies:');
-  // Ken French data doesn't change monthly — skip if files already exist and are recent
-  const eafePath = path.join(DATA_DIR, 'proxies/equity/msci_eafe_tr.csv');
-  if (fs.existsSync(eafePath)) {
-    const stat = fs.statSync(eafePath);
-    const ageDays = Math.round((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000));
-    if (ageDays < 90) {
-      console.log(`International proxies are ${ageDays} days old — skipping (Ken French updates quarterly)`);
+    // 4. Generate international proxies from Ken French
+    console.log('\n[4/5] International equity proxies:');
+    const eafePath = path.join(DATA_DIR, 'proxies/equity/msci_eafe_tr.csv');
+    if (fs.existsSync(eafePath)) {
+      const stat = fs.statSync(eafePath);
+      const ageDays = Math.round((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000));
+      if (ageDays < 90) {
+        console.log(`International proxies are ${ageDays} days old — skipping (Ken French updates quarterly)`);
+      } else {
+        runScript('scripts/generate-intl-proxies.ts --local /tmp', 'Ken French international');
+      }
     } else {
       runScript('scripts/generate-intl-proxies.ts --local /tmp', 'Ken French international');
     }
-  } else {
-    runScript('scripts/generate-intl-proxies.ts --local /tmp', 'Ken French international');
-  }
 
-  // 4. Validate
-  console.log('\n[5/5] Validating...');
-  const { files, ok, issues } = validateData();
-  console.log(`Files: ${files} total, ${ok} OK, ${issues.length} with issues`);
-  if (issues.length > 0) {
-    console.log('Issues:');
-    issues.forEach((i) => console.log(`  ⚠  ${i}`));
-  }
+    // 5. Validate
+    console.log('\n[5/5] Validating...');
+    const { files, ok, issues } = validateData();
+    console.log(`Files: ${files} total, ${ok} OK, ${issues.length} with issues`);
+    if (issues.length > 0) {
+      console.log('Issues:');
+      issues.forEach((i) => console.log(`  ⚠  ${i}`));
+    }
 
-  // Done
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const status = issues.length === 0 ? '✅' : '⚠️';
-  console.log(`\n${status} Data update complete (${elapsed}s)`);
-  console.log('Run "npx tsx scripts/validate-backtest.ts" to verify engine integrity.');
+    // Done
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const status = issues.length === 0 ? '✅' : '⚠️';
+    console.log(`\n${status} Data update complete (${elapsed}s)`);
+    console.log('Run "npx tsx scripts/validate-backtest.ts" to verify engine integrity.');
+
+    cleanupBackup(backup);
+  } catch (err) {
+    console.error(`\n❌ Data update FAILED at step: ${(err as Error).message}`);
+    restoreFromBackup(backup);
+    process.exit(1);
+  }
 }
-
-main().catch((err) => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});

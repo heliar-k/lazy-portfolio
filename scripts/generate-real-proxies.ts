@@ -507,15 +507,25 @@ function buildCompleteGold(
       goldPrice = 120.0 + row.month * 4.0;
     } else {
       // 1975+: interpolate from approximate annual prices
+      // GOLD_APPROX_PRICES stores year-end prices (e.g., 1996: 369 = Dec 1996).
+      // Interpolate from previous year-end to current year-end.
+      const prevYearPrice = GOLD_APPROX_PRICES[year - 1];
       const thisYearPrice = GOLD_APPROX_PRICES[year];
-      const nextYearPrice = GOLD_APPROX_PRICES[year + 1];
 
-      if (thisYearPrice && nextYearPrice) {
-        // Linear interpolation between year-end prices
-        const frac = (row.month - 1) / 12;
-        goldPrice = thisYearPrice + (nextYearPrice - thisYearPrice) * frac;
+      if (prevYearPrice && thisYearPrice) {
+        // Normal case: interpolate between year-1 end and year end
+        const frac = row.month / 12;
+        goldPrice = prevYearPrice + (thisYearPrice - prevYearPrice) * frac;
       } else if (thisYearPrice) {
-        goldPrice = thisYearPrice;
+        // First year in table (1975): no prevYear, use thisYearPrice as Jan baseline
+        // and interpolate toward next year
+        const nextYearPrice = GOLD_APPROX_PRICES[year + 1];
+        if (nextYearPrice) {
+          const frac = (row.month - 1) / 12;
+          goldPrice = thisYearPrice + (nextYearPrice - thisYearPrice) * frac;
+        } else {
+          goldPrice = thisYearPrice;
+        }
       } else {
         // Past the last known year, keep last price
         goldPrice = result[result.length - 1]?.price ?? 2000;
@@ -529,8 +539,294 @@ function buildCompleteGold(
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Step 10: Extend proxy CSVs past Shiller data end (2023-09-30)
+//
+// Fetches post-Shiller monthly returns from Yahoo Finance and FRED,
+// then appends them to each base proxy CSV so data is current.
 // ---------------------------------------------------------------------------
+
+interface MonthlyReturnPoint {
+  date: string;
+  monthlyReturn: number;
+}
+
+async function fetchYahooMonthlyReturns(
+  symbol: string,
+  startDate: string,
+): Promise<MonthlyReturnPoint[]> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const from = Math.floor(new Date(startDate + '-01').getTime() / 1000);
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1mo&period1=${from}&period2=${now}`;
+    const res = await undiciFetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+    });
+
+    if (!res.ok) {
+      console.log(`   Yahoo Finance ${symbol}: HTTP ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json() as any;
+    const result = json?.chart?.result?.[0];
+    if (!result) return [];
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const adjclose: number[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
+
+    const points: MonthlyReturnPoint[] = [];
+    for (let i = 1; i < Math.min(timestamps.length, adjclose.length); i++) {
+      if (adjclose[i] === null || adjclose[i] === undefined || adjclose[i] <= 0) continue;
+      if (adjclose[i - 1] === null || adjclose[i - 1] === undefined || adjclose[i - 1] <= 0) continue;
+
+      const d = new Date(timestamps[i] * 1000);
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const date = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+      const monthlyReturn = (adjclose[i] - adjclose[i - 1]) / adjclose[i - 1];
+      points.push({ date, monthlyReturn });
+    }
+
+    return points;
+  } catch (err) {
+    console.log(`   Yahoo Finance ${symbol} error: ${(err as Error).message}`);
+    return [];
+  }
+}
+
+function loadCSVData(filePath: string): { date: string; price: number }[] {
+  const text = fs.readFileSync(filePath, 'utf-8');
+  const lines = text.trim().split('\n');
+  return lines.slice(1).map(line => {
+    const [date, price] = line.split(',');
+    return { date, price: parseFloat(price) };
+  });
+}
+
+function extendProxySeries(
+  proxyPath: string,
+  extensionReturns: MonthlyReturnPoint[],
+  proxyName: string,
+): number {
+  if (extensionReturns.length === 0) {
+    console.log(`   ${proxyName}: no extension data available, skipping`);
+    return 0;
+  }
+
+  const existing = loadCSVData(proxyPath);
+  const lastExisting = existing[existing.length - 1];
+  const lastDate = lastExisting.date;
+
+  // Filter to only dates after the last existing date
+  const newPoints = extensionReturns
+    .filter(p => p.date > lastDate)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (newPoints.length === 0) {
+    console.log(`   ${proxyName}: already up to date (last: ${lastDate})`);
+    return 0;
+  }
+
+  // Apply monthly returns to extend the cumulative index
+  let lastPrice = lastExisting.price;
+  const extended: { date: string; price: number }[] = [];
+  for (const pt of newPoints) {
+    lastPrice *= (1 + pt.monthlyReturn);
+    extended.push({ date: pt.date, price: Math.round(lastPrice * 10000) / 10000 });
+  }
+
+  // Append to CSV
+  const lines: string[] = [];
+  for (const p of extended) {
+    lines.push(`${p.date},${p.price}`);
+  }
+  fs.appendFileSync(proxyPath, '\n' + lines.join('\n'));
+
+  console.log(`   ${proxyName}: extended +${extended.length} months (${extended[0].date} → ${extended[extended.length - 1].date})`);
+  return extended.length;
+}
+
+function extendCashWithFRED(
+  cashPath: string,
+  dtb3Series: { date: string; value: number }[],
+): number {
+  if (dtb3Series.length === 0) {
+    console.log('   CASH: no FRED DTB3 data, skipping');
+    return 0;
+  }
+
+  const existing = loadCSVData(cashPath);
+  const lastExisting = existing[existing.length - 1];
+  const lastDate = lastExisting.date;
+
+  // Build monthly returns from DTB3 rates (rate is in percent)
+  const dtb3ByMonth = new Map<string, number>();
+  for (const pt of dtb3Series) {
+    dtb3ByMonth.set(pt.date.substring(0, 7), pt.value);
+  }
+
+  const extensionReturns: MonthlyReturnPoint[] = [];
+  for (const [ym, rate] of dtb3ByMonth) {
+    // Construct end-of-month date
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const date = `${ym}-${String(lastDay).padStart(2, '0')}`;
+    if (date > lastDate) {
+      const monthlyReturn = (rate / 100) / 12;
+      extensionReturns.push({ date, monthlyReturn });
+    }
+  }
+  extensionReturns.sort((a, b) => a.date.localeCompare(b.date));
+
+  return extendProxySeries(cashPath, extensionReturns, 'CASH');
+}
+
+function extendCpiSeries(
+  cpiPath: string,
+  fredCpiSeries: { date: string; value: number }[],
+): number {
+  if (fredCpiSeries.length === 0) {
+    console.log('   CPI: no FRED CPIAUCSL data, skipping');
+    return 0;
+  }
+
+  const existing = loadCSVData(cpiPath);
+  const lastExisting = existing[existing.length - 1];
+  const lastDate = lastExisting.date;
+
+  // Build FRED CPI lookup exactly as the existing CSV format
+  const fredByMonth = new Map<string, number>();
+  for (const pt of fredCpiSeries) {
+    fredByMonth.set(pt.date.substring(0, 7), pt.value);
+  }
+
+  // Ratio-align at splice point
+  const spliceFred = fredByMonth.get(lastDate.substring(0, 7));
+  if (!spliceFred) {
+    console.log(`   CPI: no FRED data at splice point ${lastDate.substring(0, 7)}, skipping`);
+    return 0;
+  }
+  const ratio = spliceFred / lastExisting.price;
+
+  // Collect new months
+  const newPoints: { date: string; value: number }[] = [];
+  for (const [ym, fredValue] of fredByMonth) {
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const date = `${ym}-${String(lastDay).padStart(2, '0')}`;
+    if (date > lastDate) {
+      // Ratio-align to match existing CPI scale
+      newPoints.push({ date, value: Math.round(fredValue / ratio * 100) / 100 });
+    }
+  }
+  newPoints.sort((a, b) => a.date.localeCompare(b.date));
+
+  if (newPoints.length === 0) {
+    console.log(`   CPI: already up to date (last: ${lastDate})`);
+    return 0;
+  }
+
+  // Append to CSV (CPI CSV uses "date,cpi" format like price CSVs)
+  const lines: string[] = [];
+  for (const p of newPoints) {
+    lines.push(`${p.date},${p.value}`);
+  }
+  fs.appendFileSync(cpiPath, '\n' + lines.join('\n'));
+
+  console.log(`   US_CPI: extended +${newPoints.length} months (${newPoints[0].date} → ${newPoints[newPoints.length - 1].date})`);
+  return newPoints.length;
+}
+
+async function extendAllProxies(
+  proxyOk: boolean,
+  dtb3Series: { date: string; value: number }[],
+  fredCpiSeries: { date: string; value: number }[],
+): Promise<void> {
+  console.log('\n10. Extending base proxy CSVs past Shiller data end (2023-09)...');
+
+  const DATA_DIR_PROXIES = path.join(DATA_DIR, 'proxies');
+  const extensionStart = '2023-10'; // month after last Shiller data point
+  let totalExtended = 0;
+  let totalSkipped = 0;
+
+  // Always extend CASH with FRED DTB3 (no Yahoo needed)
+  const cashPath = path.join(DATA_DIR_PROXIES, 'bond/cash.csv');
+  if (fs.existsSync(cashPath)) {
+    const n = extendCashWithFRED(cashPath, dtb3Series);
+    if (n > 0) totalExtended++; else totalSkipped++;
+  }
+
+  // Always extend CPI with FRED CPIAUCSL (no Yahoo needed)
+  const cpiPath = path.join(DATA_DIR, 'inflation/us_cpi.csv');
+  if (fs.existsSync(cpiPath)) {
+    const n = extendCpiSeries(cpiPath, fredCpiSeries);
+    if (n > 0) totalExtended++; else totalSkipped++;
+  }
+
+  if (!proxyOk) {
+    console.log('\n   ⚠️  Proxy unavailable — skipping Yahoo Finance extensions.');
+    console.log('   The following CSVs still end at 2023-09:');
+    console.log('     sp500_tr.csv, us_10y_tr.csv, us_long_tr.csv, us_agg_bond_tr.csv, gold_spot.csv');
+    console.log('   Run `npm run update-data` when proxy is available to extend them.\n');
+    totalSkipped += 5;
+    console.log(`   Summary: ${totalExtended} extended, ${totalSkipped} skipped`);
+    return;
+  }
+
+  // Fetch Yahoo Finance monthly returns for each ETF
+  const fetches: { symbol: string; proxyPath: string; proxyName: string }[] = [
+    { symbol: 'SPY', proxyPath: path.join(DATA_DIR_PROXIES, 'equity/sp500_tr.csv'), proxyName: 'SP500_TR' },
+    { symbol: 'TLT', proxyPath: path.join(DATA_DIR_PROXIES, 'bond/us_long_tr.csv'), proxyName: 'US_LONG_TR' },
+    { symbol: 'IEF', proxyPath: path.join(DATA_DIR_PROXIES, 'bond/us_10y_tr.csv'), proxyName: 'US_10Y_TR' },
+    { symbol: 'AGG', proxyPath: path.join(DATA_DIR_PROXIES, 'bond/us_agg_bond_tr.csv'), proxyName: 'US_AGG_BOND_TR' },
+  ];
+
+  for (const { symbol, proxyPath, proxyName } of fetches) {
+    if (!fs.existsSync(proxyPath)) {
+      console.log(`   ${proxyName}: file not found, skipping`);
+      totalSkipped++;
+      continue;
+    }
+
+    console.log(`   Fetching ${symbol} monthly returns from Yahoo Finance...`);
+    const returns = await fetchYahooMonthlyReturns(symbol, extensionStart);
+
+    if (returns.length === 0) {
+      console.log(`   ⚠️  ${proxyName}: could not fetch ${symbol} data, CSV stays at 2023-09`);
+      totalSkipped++;
+    } else {
+      const n = extendProxySeries(proxyPath, returns, proxyName);
+      if (n > 0) totalExtended++; else totalSkipped++;
+    }
+
+    // Rate limit
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  // Gold: fetch GLD and multiply by 10
+  const goldPath = path.join(DATA_DIR_PROXIES, 'commodity/gold_spot.csv');
+  if (fs.existsSync(goldPath)) {
+    console.log('   Fetching GLD monthly returns from Yahoo Finance (×10 for spot)...');
+    const gldReturns = await fetchYahooMonthlyReturns('GLD', extensionStart);
+    if (gldReturns.length > 0) {
+      // GLD returns are identical to spot returns (the ×10 scaling cancels out in return calc)
+      const n = extendProxySeries(goldPath, gldReturns, 'GOLD_SPOT');
+      if (n > 0) totalExtended++; else totalSkipped++;
+    } else {
+      console.log('   ⚠️  GOLD_SPOT: could not fetch GLD data, CSV stays at 2023-09');
+      totalSkipped++;
+    }
+  } else {
+    totalSkipped++;
+  }
+
+  console.log(`\n   Summary: ${totalExtended} extended, ${totalSkipped} skipped`);
+}
 
 async function main() {
   console.log('Generating real historical proxy data from Shiller XLS...\n');
@@ -606,12 +902,15 @@ async function main() {
   const goldData = buildCompleteGold(rows, yahooGold);
   writeCSV(path.join(DATA_DIR, 'proxies/commodity/gold_spot.csv'), goldData);
 
-  // 10. Update etf_map.json to use the new proxies
-  console.log('\n10. Updating ETF mappings...');
+  // 10. Extend all base proxy CSVs past Shiller data end (2023-09)
+  await extendAllProxies(proxyOk, dtb3Series, fredCpiSeries);
+
+  // 11. Update etf_map.json to use the new proxies
+  console.log('\n11. Updating ETF mappings...');
   updateEtfMappings();
 
-  // 11. Update data_version.json
-  console.log('11. Updating data version...');
+  // 12. Update data_version.json
+  console.log('12. Updating data version...');
   const version = {
     version: 2,
     lastUpdated: new Date().toISOString().split('T')[0],
@@ -629,24 +928,17 @@ function updateEtfMappings(): void {
   const etfMapPath = path.join(DATA_DIR, 'etf_map.json');
   const etfMap = JSON.parse(fs.readFileSync(etfMapPath, 'utf-8')) as any[];
 
-  // Update key ETF proxy assignments to use the new long-history proxies
+  // BLENDED ETFs are managed by blend-etf-data.ts — NEVER reset these here.
+  // Currently blended: SPY, TLT, SHY, BND, VTI, BIL, GLD, AGG, IEF
+
   const updates: Record<string, string> = {
-    'VTI': 'SP500_TR',
     'VOO': 'SP500_TR',
     'IVV': 'SP500_TR',
-    'SPY': 'SP500_TR',
-    'VXUS': 'MSCI_EAFE_TR',       // Keep existing for international
+    'VXUS': 'MSCI_EAFE_TR',
     'VEA': 'MSCI_EAFE_TR',
     'VWO': 'MSCI_EM_TR',
-    'TLT': 'US_LONG_TR',           // Use new long bond proxy
     'EDV': 'US_LONG_TR',
-    'IEF': 'US_10Y_TR',
     'IEI': 'US_10Y_TR',
-    'SHY': 'CASH',
-    'BIL': 'CASH',
-    'BND': 'US_AGG_BOND_TR',
-    'AGG': 'US_AGG_BOND_TR',
-    'GLD': 'GOLD_SPOT',
     'IAU': 'GOLD_SPOT',
   };
 
