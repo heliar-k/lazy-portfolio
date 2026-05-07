@@ -34,15 +34,12 @@ export function runMonteCarlo(params: MonteCarloParams): MonteCarloResult {
     };
   }
 
-  // Extract monthly returns from time series
-  const monthlyReturns: number[] = [];
-  for (let i = 1; i < timeSeries.length; i++) {
-    const prev = timeSeries[i - 1].portfolioValue;
-    const curr = timeSeries[i].portfolioValue;
-    if (prev > 0) {
-      monthlyReturns.push(curr / prev - 1);
-    }
-  }
+  // Extract TWR monthly returns, skipping the initial point. Portfolio value
+  // changes can include deposits/withdrawals and would pollute the sample.
+  const monthlyReturns = timeSeries
+    .slice(1)
+    .map((point) => point.monthlyReturn)
+    .filter((ret) => Number.isFinite(ret));
 
   if (monthlyReturns.length === 0) {
     return {
