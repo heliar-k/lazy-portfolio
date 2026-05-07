@@ -163,17 +163,20 @@ export function ParameterForm({
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2 pt-5">
-          <input
-            type="checkbox"
-            id="inflation-adjusted"
-            checked={inflationAdjusted}
-            onChange={(e) => onInflationAdjustedChange(e.target.checked)}
-            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-          />
-          <label htmlFor="inflation-adjusted" className="text-xs text-gray-600">
-            {t('backtest.inflationAdjust')}
-          </label>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1 invisible select-none" aria-hidden="true">&nbsp;</label>
+          <div className="flex items-center gap-2 py-2">
+            <input
+              type="checkbox"
+              id="inflation-adjusted"
+              checked={inflationAdjusted}
+              onChange={(e) => onInflationAdjustedChange(e.target.checked)}
+              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+            <label htmlFor="inflation-adjusted" className="text-xs text-gray-600">
+              {t('backtest.inflationAdjust')}
+            </label>
+          </div>
         </div>
         <button
           onClick={onRun}

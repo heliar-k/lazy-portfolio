@@ -50,24 +50,13 @@
   },
   "cashflow": {
     "title": "Cashflows",
-    "events": "{{count}} events",
-    "date": "Date",
-    "amount": "Amount",
-    "amountPlaceholder": "1,000",
-    "type": "Type",
+    "activeCount": "{{count}} active",
     "deposit": "Deposit",
-    "withdrawal": "Withdrawal",
-    "recurring": "Recurring",
-    "every": "Every",
+    "withdrawal": "Withdraw",
     "monthly": "Monthly",
     "quarterly": "Quarterly",
     "annual": "Annually",
-    "until": "Until",
-    "add": "Add",
-    "totalDeposits": "Total deposits",
-    "totalWithdrawals": "Total withdrawals",
-    "recurringText": "recurring {{frequency}}",
-    "recurringUntil": "recurring {{frequency}} until {{date}}"
+    "hint": "Amount of 0 means no cashflow for that frequency"
   },
   "chart": {
     "portfolioValue": "Portfolio Value",

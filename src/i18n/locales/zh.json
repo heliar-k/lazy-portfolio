@@ -50,24 +50,13 @@
   },
   "cashflow": {
     "title": "现金流",
-    "events": "{{count}} 条记录",
-    "date": "日期",
-    "amount": "金额",
-    "amountPlaceholder": "1,000",
-    "type": "类型",
+    "activeCount": "{{count}} 项",
     "deposit": "存入",
     "withdrawal": "取出",
-    "recurring": "定期",
-    "every": "频率",
     "monthly": "每月",
     "quarterly": "每季",
     "annual": "每年",
-    "until": "截止",
-    "add": "添加",
-    "totalDeposits": "总存入",
-    "totalWithdrawals": "总取出",
-    "recurringText": "定期 {{frequency}}",
-    "recurringUntil": "定期 {{frequency}} 至 {{date}}"
+    "hint": "金额为 0 时不计入现金流"
   },
   "chart": {
     "portfolioValue": "组合价值",

@@ -1,54 +1,72 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CashflowEvent } from '@/engine/types';
 
+type FreqType = 'monthly' | 'quarterly' | 'annual';
+
+interface RowState {
+  amount: string;
+  type: 'deposit' | 'withdrawal';
+}
+
 interface CashflowEditorProps {
   cashflows: CashflowEvent[];
+  startDate: string;
   onChange: (cashflows: CashflowEvent[]) => void;
 }
 
-type RecurringFreq = 'monthly' | 'quarterly' | 'annual';
+const FREQS: { key: FreqType; labelKey: string }[] = [
+  { key: 'monthly', labelKey: 'cashflow.monthly' },
+  { key: 'quarterly', labelKey: 'cashflow.quarterly' },
+  { key: 'annual', labelKey: 'cashflow.annual' },
+];
 
-export function CashflowEditor({ cashflows, onChange }: CashflowEditorProps) {
+function parseRow(cashflows: CashflowEvent[], freq: FreqType): RowState {
+  const match = cashflows.find((c) => c.recurring?.frequency === freq);
+  if (!match) return { amount: '', type: 'deposit' };
+  return {
+    amount: String(Math.abs(match.amount)),
+    type: match.amount >= 0 ? 'deposit' : 'withdrawal',
+  };
+}
+
+export function CashflowEditor({ cashflows, startDate, onChange }: CashflowEditorProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [date, setDate] = useState('');
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState<'deposit' | 'withdrawal'>('deposit');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState<RecurringFreq>('monthly');
-  const [endDate, setEndDate] = useState('');
 
-  const handleAdd = () => {
-    if (!date || !amount) return;
+  const [rows, setRows] = useState<Record<FreqType, RowState>>(() => ({
+    monthly: parseRow(cashflows, 'monthly'),
+    quarterly: parseRow(cashflows, 'quarterly'),
+    annual: parseRow(cashflows, 'annual'),
+  }));
 
-    const event: CashflowEvent = {
-      date,
-      amount: type === 'withdrawal' ? -Math.abs(parseFloat(amount)) : Math.abs(parseFloat(amount)),
-      type,
-    };
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const startDateRef = useRef(startDate);
+  startDateRef.current = startDate;
 
-    if (isRecurring) {
-      event.recurring = { frequency };
-      if (endDate) event.recurring.endDate = endDate;
+  useEffect(() => {
+    const events: CashflowEvent[] = [];
+    for (const freq of ['monthly', 'quarterly', 'annual'] as FreqType[]) {
+      const row = rows[freq];
+      const amt = parseFloat(row.amount);
+      if (!isNaN(amt) && amt > 0) {
+        events.push({
+          date: startDateRef.current,
+          amount: row.type === 'withdrawal' ? -amt : amt,
+          type: row.type,
+          recurring: { frequency: freq },
+        });
+      }
     }
+    onChangeRef.current(events);
+  }, [rows]);
 
-    onChange([...cashflows, event]);
-    setAmount('');
-    setEndDate('');
-    setIsRecurring(false);
+  const updateRow = (freq: FreqType, patch: Partial<RowState>) => {
+    setRows((prev) => ({ ...prev, [freq]: { ...prev[freq], ...patch } }));
   };
 
-  const handleRemove = (index: number) => {
-    onChange(cashflows.filter((_, i) => i !== index));
-  };
-
-  const totalDeposits = cashflows
-    .filter((c) => c.amount > 0)
-    .reduce((s, c) => s + c.amount, 0);
-  const totalWithdrawals = cashflows
-    .filter((c) => c.amount < 0)
-    .reduce((s, c) => s + Math.abs(c.amount), 0);
+  const activeCount = Object.values(rows).filter((r) => parseFloat(r.amount) > 0).length;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -63,139 +81,62 @@ export function CashflowEditor({ cashflows, onChange }: CashflowEditorProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
         {t('cashflow.title')}
-        {cashflows.length > 0 && (
+        {activeCount > 0 && (
           <span className="text-xs text-gray-400 font-normal">
-            ({t('cashflow.events', { count: cashflows.length })})
+            ({t('cashflow.activeCount', { count: activeCount })})
           </span>
         )}
       </button>
 
       {expanded && (
-        <div className="mt-3">
-          {/* Add form */}
-          <div className="flex flex-wrap gap-2 items-end p-3 bg-gray-50 rounded-lg">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">{t('cashflow.date')}</label>
-              <input
-                type="month"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="px-2 py-1.5 border border-gray-300 rounded text-sm w-36
-                  focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">{t('cashflow.amount')}</label>
-              <input
-                type="number"
-                min={1}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder={t('cashflow.amountPlaceholder')}
-                className="px-2 py-1.5 border border-gray-300 rounded text-sm w-28
-                  focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">{t('cashflow.type')}</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as 'deposit' | 'withdrawal')}
-                className="px-2 py-1.5 border border-gray-300 rounded text-sm
-                  focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="deposit">{t('cashflow.deposit')}</option>
-                <option value="withdrawal">{t('cashflow.withdrawal')}</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-1 pt-4">
-              <input
-                type="checkbox"
-                id="recurring"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className="h-3.5 w-3.5 text-blue-600 rounded border-gray-300"
-              />
-              <label htmlFor="recurring" className="text-xs text-gray-600">{t('cashflow.recurring')}</label>
-            </div>
-            {isRecurring && (
-              <>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('cashflow.every')}</label>
-                  <select
-                    value={frequency}
-                    onChange={(e) => setFrequency(e.target.value as RecurringFreq)}
-                    className="px-2 py-1.5 border border-gray-300 rounded text-sm
-                      focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="monthly">{t('cashflow.monthly')}</option>
-                    <option value="quarterly">{t('cashflow.quarterly')}</option>
-                    <option value="annual">{t('cashflow.annual')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">{t('cashflow.until')}</label>
-                  <input
-                    type="month"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded text-sm w-36
-                      focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </>
-            )}
-            <button
-              onClick={handleAdd}
-              disabled={!date || !amount}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded
-                hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t('cashflow.add')}
-            </button>
-          </div>
-
-          {/* Event list */}
-          {cashflows.length > 0 && (
-            <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
-              {cashflows.map((cf, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between px-3 py-1.5 bg-gray-50 rounded text-sm"
-                >
-                  <span className="text-gray-700">
-                    <span className="text-gray-500 text-xs">{cf.date}</span>{' '}
-                    <span className={cf.amount >= 0 ? 'text-green-600' : 'text-red-500'}>
-                      {cf.amount >= 0 ? '+' : '-'}${Math.abs(cf.amount).toLocaleString()}
-                    </span>
-                    {cf.recurring && (
-                      <span className="text-gray-400 text-xs ml-1">
-                        ({cf.recurring.endDate
-                          ? t('cashflow.recurringUntil', { frequency: cf.recurring.frequency, date: cf.recurring.endDate })
-                          : t('cashflow.recurringText', { frequency: cf.recurring.frequency })})
-                      </span>
-                    )}
-                  </span>
+        <div className="mt-3 space-y-2">
+          {FREQS.map(({ key, labelKey }) => {
+            const row = rows[key];
+            const parsedAmt = parseFloat(row.amount);
+            const hasAmount = !isNaN(parsedAmt) && parsedAmt > 0;
+            return (
+              <div key={key} className="flex items-center gap-3">
+                <span className="text-xs text-gray-600 w-10 shrink-0">{t(labelKey)}</span>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs shrink-0">
                   <button
-                    onClick={() => handleRemove(i)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
+                    className={`px-2.5 py-1.5 transition-colors ${
+                      row.type === 'deposit'
+                        ? 'bg-green-50 text-green-700 font-medium'
+                        : 'bg-white text-gray-400 hover:text-gray-600'
+                    }`}
+                    onClick={() => updateRow(key, { type: 'deposit' })}
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    {t('cashflow.deposit')}
+                  </button>
+                  <button
+                    className={`px-2.5 py-1.5 border-l border-gray-200 transition-colors ${
+                      row.type === 'withdrawal'
+                        ? 'bg-red-50 text-red-700 font-medium'
+                        : 'bg-white text-gray-400 hover:text-gray-600'
+                    }`}
+                    onClick={() => updateRow(key, { type: 'withdrawal' })}
+                  >
+                    {t('cashflow.withdrawal')}
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Summary */}
-          {cashflows.length > 0 && (
-            <div className="mt-2 flex gap-4 text-xs text-gray-500">
-              <span>{t('cashflow.totalDeposits')}: <span className="text-green-600">+${totalDeposits.toLocaleString()}</span></span>
-              <span>{t('cashflow.totalWithdrawals')}: <span className="text-red-500">-${totalWithdrawals.toLocaleString()}</span></span>
-            </div>
-          )}
+                <input
+                  type="number"
+                  min={0}
+                  value={row.amount}
+                  onChange={(e) => updateRow(key, { amount: e.target.value })}
+                  placeholder="0"
+                  className="w-28 px-2 py-1.5 border border-gray-300 rounded text-sm
+                    focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {hasAmount && (
+                  <span className={`text-xs ${row.type === 'deposit' ? 'text-green-600' : 'text-red-500'}`}>
+                    {row.type === 'deposit' ? '+' : '-'}${parsedAmt.toLocaleString()}/{t(labelKey)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-xs text-gray-400 mt-1">{t('cashflow.hint')}</p>
         </div>
       )}
     </div>

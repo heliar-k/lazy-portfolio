@@ -272,7 +272,7 @@ export function BacktestPage() {
       />
 
       <div className="mt-4">
-        <CashflowEditor cashflows={params.cashflows} onChange={setCashflows} />
+        <CashflowEditor cashflows={params.cashflows} startDate={params.startDate} onChange={setCashflows} />
       </div>
 
       <div className="mt-4">
