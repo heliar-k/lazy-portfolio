@@ -21,7 +21,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0003,
     "inceptionDate": "2010-09-07",
-    "proxySymbol": "VOO_BLENDED"
+    "proxySymbol": "SP500_TR"
   },
   {
     "symbol": "SPY",
@@ -405,7 +405,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0005,
     "inceptionDate": "2007-07-20",
-    "proxySymbol": "VEA_BLENDED"
+    "proxySymbol": "MSCI_EAFE_TR"
   },
   {
     "symbol": "EFA",
@@ -561,7 +561,7 @@
     "provider": "Vanguard",
     "expenseRatio": 0.0008,
     "inceptionDate": "2005-03-04",
-    "proxySymbol": "VWO_BLENDED"
+    "proxySymbol": "MSCI_EM_TR"
   },
   {
     "symbol": "EEM",
@@ -1197,7 +1197,7 @@
     "provider": "iShares",
     "expenseRatio": 0.0025,
     "inceptionDate": "2005-01-21",
-    "proxySymbol": "IAU_BLENDED"
+    "proxySymbol": "GOLD_SPOT"
   },
   {
     "symbol": "BRK-A",
