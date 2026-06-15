@@ -1,27 +1,27 @@
-import { useState, useMemo, createContext, useContext } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
-import SelectInput from 'ink-select-input';
-import TextInput from 'ink-text-input';
-import Spinner from 'ink-spinner';
 import * as asciichart from 'asciichart';
-import { getTemplateMetadata, getPortfolioTemplates } from '../portfolios/registry.js';
+import { Box, Text, useApp, useInput } from 'ink';
+import SelectInput from 'ink-select-input';
+import Spinner from 'ink-spinner';
+import TextInput from 'ink-text-input';
+import { createContext, useContext, useMemo, useState } from 'react';
+import { runBacktest } from '../engine/backtest.js';
+import { getPercentile, runMonteCarlo } from '../engine/monte-carlo.js';
+import type {
+    BacktestParameters,
+    BacktestResult,
+    DisplayCurrency,
+    PortfolioDefinition,
+    PortfolioHolding,
+    RebalancingStrategy,
+    SWRResult,
+} from '../engine/types.js';
+import { computeSWR } from '../engine/withdrawal.js';
+import { getPortfolioTemplates, getTemplateMetadata } from '../portfolios/registry.js';
+import { APP_VERSION } from '../version.js';
+import { addCustomPortfolio, deleteCustomPortfolio, loadCustomPortfolios, loadPreferences, savePreferences, updateCustomPortfolio } from './custom-store.js';
+import type { EtfMapEntry } from './data-loader.js';
 import { loadEtfMap } from './data-loader.js';
 import { resolvePortfolioData } from './data-resolver.js';
-import { runBacktest } from '../engine/backtest.js';
-import { runMonteCarlo, getPercentile } from '../engine/monte-carlo.js';
-import { computeSWR } from '../engine/withdrawal.js';
-import { loadCustomPortfolios, addCustomPortfolio, updateCustomPortfolio, deleteCustomPortfolio, loadPreferences, savePreferences } from './custom-store.js';
-import { APP_VERSION } from '../version.js';
-import type {
-  PortfolioDefinition,
-  PortfolioHolding,
-  BacktestResult,
-  BacktestParameters,
-  RebalancingStrategy,
-  DisplayCurrency,
-  SWRResult,
-} from '../engine/types.js';
-import type { EtfMapEntry } from './data-loader.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -346,6 +346,7 @@ export default function App() {
   const [rebalancing, setRebalancing] = useState('annual');
   const [currency, setCurrency] = useState<DisplayCurrency>('USD');
   const [inflation, setInflation] = useState(true);
+  const [cfRebalance, setCfRebalance] = useState(false);
   const [paramStep, setParamStep] = useState(0);
 
   // Data
@@ -417,6 +418,7 @@ export default function App() {
             inflationRegion: region as BacktestParameters['inflationRegion'],
             inflationAdjusted: inflation,
             rebalancing: parseRebalancing(rebalancing),
+            cashflowTriggersRebalance: cfRebalance,
             cashflows: [],
           };
           allResults.push({ name: p.name, result: runBacktest(params, assetReturns, fxRates, cpiSeries) });
@@ -807,9 +809,11 @@ export default function App() {
           <ParamsView
             startDate={startDate} endDate={endDate} capital={capital}
             rebalancing={rebalancing} currency={currency} inflation={inflation}
+            cfRebalance={cfRebalance}
             paramStep={paramStep}
             onStartDate={setStartDate} onEndDate={setEndDate} onCapital={setCapital}
             onRebalancing={setRebalancing} onCurrency={setCurrency} onInflation={setInflation}
+            onCfRebalance={setCfRebalance}
             onNextStep={() => setParamStep((s) => s + 1)}
             onRun={isSWRMode ? doSWR : doRun}
             runLabel={isSWRMode ? 'Run SWR Analysis' : selectedPortfolios.length > 1 ? 'Run Comparison' : 'Run Backtest'}
@@ -1300,15 +1304,16 @@ function CustomNameView({ name, onChange, onSubmit, label }: {
 // ─── Params View ─────────────────────────────────────────────────────────────
 
 function ParamsView({
-  startDate, endDate, capital, rebalancing, currency, inflation,
-  paramStep, onStartDate, onEndDate, onCapital, onRebalancing, onCurrency, onInflation,
+  startDate, endDate, capital, rebalancing, currency, inflation, cfRebalance,
+  paramStep, onStartDate, onEndDate, onCapital, onRebalancing, onCurrency, onInflation, onCfRebalance,
   onNextStep, onRun, runLabel, error,
 }: {
   startDate: string; endDate: string; capital: string;
-  rebalancing: string; currency: DisplayCurrency; inflation: boolean;
+  rebalancing: string; currency: DisplayCurrency; inflation: boolean; cfRebalance: boolean;
   paramStep: number;
   onStartDate: (v: string) => void; onEndDate: (v: string) => void; onCapital: (v: string) => void;
   onRebalancing: (v: string) => void; onCurrency: (v: DisplayCurrency) => void; onInflation: (v: boolean) => void;
+  onCfRebalance: (v: boolean) => void;
   onNextStep: () => void; onRun: () => void; runLabel: string; error: string;
 }) {
   const t = useTheme();
@@ -1386,7 +1391,20 @@ function ParamsView({
           <Box><Text>  Inflation:   </Text><Text color={t.positive as any}>{inflation ? 'Yes' : 'No'}</Text></Box>
         )}
 
-        {paramStep >= 7 && (
+        {paramStep === 7 && (
+          <Box flexDirection="column">
+            <Text>▸ Rebalance on Cashflow:</Text>
+            <SelectInput
+              items={[{ label: 'Yes (force rebalance)', value: 'yes' }, { label: 'No (soft rebalance)', value: 'no' }]}
+              onSelect={(item) => { onCfRebalance(item.value === 'yes'); onNextStep(); }}
+            />
+          </Box>
+        )}
+        {paramStep > 7 && (
+          <Box><Text>  CF Rebalance: </Text><Text color={t.positive as any}>{cfRebalance ? 'Yes' : 'No'}</Text></Box>
+        )}
+
+        {paramStep >= 8 && (
           <Box marginTop={1}>
             <SelectInput items={[{ label: `▶  ${runLabel}`, value: 'run' }]} onSelect={onRun} />
           </Box>

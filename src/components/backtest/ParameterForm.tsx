@@ -1,6 +1,6 @@
+import type { DisplayCurrency, RebalancingStrategy, Region } from '@/engine/types';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { RebalancingStrategy, DisplayCurrency, Region } from '@/engine/types';
 
 interface ParameterFormProps {
   startDate: string;
@@ -10,6 +10,7 @@ interface ParameterFormProps {
   displayCurrency: DisplayCurrency;
   inflationRegion: Region;
   inflationAdjusted: boolean;
+  cashflowTriggersRebalance: boolean;
   onStartDateChange: (d: string) => void;
   onEndDateChange: (d: string) => void;
   onCapitalChange: (c: number) => void;
@@ -17,6 +18,7 @@ interface ParameterFormProps {
   onCurrencyChange: (c: DisplayCurrency) => void;
   onInflationChange: (r: Region) => void;
   onInflationAdjustedChange: (enabled: boolean) => void;
+  onCashflowTriggersRebalanceChange: (enabled: boolean) => void;
   onRun: () => void;
   canRun: boolean;
   isRunning: boolean;
@@ -46,6 +48,7 @@ export function ParameterForm({
   displayCurrency,
   inflationRegion,
   inflationAdjusted,
+  cashflowTriggersRebalance,
   onStartDateChange,
   onEndDateChange,
   onCapitalChange,
@@ -53,6 +56,7 @@ export function ParameterForm({
   onCurrencyChange,
   onInflationChange,
   onInflationAdjustedChange,
+  onCashflowTriggersRebalanceChange,
   onRun,
   canRun,
   isRunning,
@@ -187,6 +191,21 @@ export function ParameterForm({
             />
             <label htmlFor="inflation-adjusted" className="text-xs text-gray-600">
               {t('backtest.inflationAdjust')}
+            </label>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1 invisible select-none" aria-hidden="true">&nbsp;</label>
+          <div className="flex items-center gap-2 py-2">
+            <input
+              type="checkbox"
+              id="cf-rebalance"
+              checked={cashflowTriggersRebalance}
+              onChange={(e) => onCashflowTriggersRebalanceChange(e.target.checked)}
+              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+            <label htmlFor="cf-rebalance" className="text-xs text-gray-600">
+              {t('backtest.cashflowTriggersRebalance')}
             </label>
           </div>
         </div>

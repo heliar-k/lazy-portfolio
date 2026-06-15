@@ -37,6 +37,7 @@
     "noBenchmark": "— None —",
     "inflation": "Inflation",
     "inflationAdjust": "Inflation Adjusted",
+    "cashflowTriggersRebalance": "Rebalance on Cashflow",
     "paramsChanged": "Parameters changed — results may be outdated. Re-run the backtest.",
     "noResults": "Run a backtest to see results",
     "dataAsOf": "Data as of {{date}}",

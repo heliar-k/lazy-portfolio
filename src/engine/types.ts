@@ -126,6 +126,11 @@ export interface BacktestParameters {
   inflationAdjusted: boolean;
   rebalancing: RebalancingStrategy;
   cashflows: CashflowEvent[];
+  /** When true, any month with a cashflow also triggers a full rebalance
+   *  before the cashflow is applied. Default (false/undefined) = soft
+   *  rebalance: cashflow is invested at target weights without resetting
+   *  existing drifted capital. */
+  cashflowTriggersRebalance?: boolean;
 }
 
 export interface MonthlyTimeSeriesPoint {

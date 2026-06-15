@@ -2,11 +2,11 @@ import { create } from 'zustand';
 import type {
   BacktestParameters,
   BacktestResult,
-  DisplayCurrency,
-  Region,
-  RebalancingStrategy,
   CashflowEvent,
+  DisplayCurrency,
   PortfolioDefinition,
+  RebalancingStrategy,
+  Region,
 } from '../engine/types';
 
 type ComputationStatus = 'idle' | 'running' | 'ready' | 'error';
@@ -33,6 +33,7 @@ interface BacktestState {
   setInflationRegion: (region: Region) => void;
   setInflationAdjusted: (enabled: boolean) => void;
   setRebalancing: (strategy: RebalancingStrategy) => void;
+  setCashflowTriggersRebalance: (enabled: boolean) => void;
   setCashflows: (cashflows: CashflowEvent[]) => void;
   setPortfolio: (portfolio: PortfolioDefinition) => void;
   setBenchmarkId: (id: string | null) => void;
@@ -57,6 +58,7 @@ function defaultParams(): BacktestParameters {
     inflationRegion: 'US',
     inflationAdjusted: true,
     rebalancing: { type: 'calendar', frequency: 'annual' },
+    cashflowTriggersRebalance: false,
     cashflows: [],
   };
 }
@@ -90,6 +92,9 @@ export const useBacktestStore = create<BacktestState>()((set) => ({
 
   setRebalancing: (strategy) =>
     set((s) => ({ params: { ...s.params, rebalancing: strategy } })),
+
+  setCashflowTriggersRebalance: (enabled) =>
+    set((s) => ({ params: { ...s.params, cashflowTriggersRebalance: enabled } })),
 
   setCashflows: (cashflows) =>
     set((s) => ({ params: { ...s.params, cashflows } })),

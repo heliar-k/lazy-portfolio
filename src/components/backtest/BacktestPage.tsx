@@ -1,27 +1,27 @@
-import { useEffect, useCallback, useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useBacktestStore } from '@/stores/backtest-store';
-import { usePortfolioStore } from '@/stores/portfolio-store';
-import { useDataStore } from '@/stores/data-store';
-import { useBacktest } from '@/hooks/useBacktest';
-import { getTemplateMetadata } from '@/portfolios/registry';
-import { ParameterForm } from '@/components/backtest/ParameterForm';
+import { BUILT_IN_BENCHMARKS } from '@/benchmarks/definitions';
 import { CashflowEditor } from '@/components/backtest/CashflowEditor';
+import type { CompSlot } from '@/components/backtest/ComparisonPanel';
 import { ComparisonPanel } from '@/components/backtest/ComparisonPanel';
+import type { CompEntry } from '@/components/backtest/ComparisonTable';
 import { ComparisonTable } from '@/components/backtest/ComparisonTable';
+import { ParameterForm } from '@/components/backtest/ParameterForm';
 import { ResultsDashboard } from '@/components/backtest/ResultsDashboard';
-import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
-import { MultiEquityChart } from '@/components/charts/MultiEquityChart';
 import { AnnualReturnsChart } from '@/components/charts/AnnualReturnsChart';
 import { DrawdownChart } from '@/components/charts/DrawdownChart';
+import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
+import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
+import { MultiEquityChart } from '@/components/charts/MultiEquityChart';
 import { RollingReturnsChart } from '@/components/charts/RollingReturnsChart';
 import { ScatterChart } from '@/components/charts/ScatterChart';
-import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
-import { timeSeriesToCSV, downloadCSV } from '@/lib/export-csv';
 import type { BacktestParameters, BacktestResult, PortfolioDefinition } from '@/engine/types';
-import type { CompSlot } from '@/components/backtest/ComparisonPanel';
-import type { CompEntry } from '@/components/backtest/ComparisonTable';
-import { BUILT_IN_BENCHMARKS } from '@/benchmarks/definitions';
+import { useBacktest } from '@/hooks/useBacktest';
+import { downloadCSV, timeSeriesToCSV } from '@/lib/export-csv';
+import { getTemplateMetadata } from '@/portfolios/registry';
+import { useBacktestStore } from '@/stores/backtest-store';
+import { useDataStore } from '@/stores/data-store';
+import { usePortfolioStore } from '@/stores/portfolio-store';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type BrushWindow = { start: string; end: string } | null;
 
@@ -55,6 +55,7 @@ function paramsSignature(
     rebal,
     slots,
     cashflows,
+    String(!!params.cashflowTriggersRebalance),
   ].join('|');
 }
 
@@ -132,6 +133,7 @@ export function BacktestPage() {
     setStartDate, setEndDate, setInitialCapital,
     setRebalancing, setDisplayCurrency, setInflationRegion, setInflationAdjusted,
     setCashflows, setPortfolio,
+    setCashflowTriggersRebalance,
     setResult, setRunning, setError } = useBacktestStore();
   const { current: portfolio } = usePortfolioStore();
   const { etfMap } = useDataStore();
@@ -261,6 +263,7 @@ export function BacktestPage() {
         displayCurrency={params.displayCurrency}
         inflationRegion={params.inflationRegion}
         inflationAdjusted={params.inflationAdjusted}
+        cashflowTriggersRebalance={params.cashflowTriggersRebalance ?? false}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onCapitalChange={setInitialCapital}
@@ -268,6 +271,7 @@ export function BacktestPage() {
         onCurrencyChange={setDisplayCurrency}
         onInflationChange={setInflationRegion}
         onInflationAdjustedChange={setInflationAdjusted}
+        onCashflowTriggersRebalanceChange={setCashflowTriggersRebalance}
         onRun={handleRunBacktest}
         canRun={canRun}
         isRunning={isRunning}

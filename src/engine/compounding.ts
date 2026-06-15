@@ -1,5 +1,5 @@
-import type { CashflowEvent, RebalancingStrategy } from './types';
 import { checkRebalanceTrigger } from './rebalancing';
+import type { CashflowEvent, RebalancingStrategy } from './types';
 
 /**
  * Compound a portfolio forward in time, tracking per-asset capital.
@@ -14,6 +14,7 @@ export function compoundPortfolio(
   cashflowSchedule: Map<string, number>, // date → net cashflow
   months: string[],
   strategy: RebalancingStrategy,
+  cashflowTriggersRebalance = false,
 ): {
   values: number[];
   cashflowImpacts: number[];
@@ -38,8 +39,14 @@ export function compoundPortfolio(
   for (let m = 0; m < nMonths; m++) {
     const totalBefore = assetCapital.reduce((s, v) => s + v, 0);
 
-    // Rebalance if the strategy triggers (skip month 0 — already at target)
-    if (m > 0 && checkRebalanceTrigger(strategy, m, months, assetCapital, targetWeights)) {
+    // Rebalance if the strategy triggers, OR if this month has a cashflow
+    // and cashflowTriggersRebalance is enabled (skip month 0 — already at target).
+    const hasCashflow = (cashflowSchedule.get(months[m]) ?? 0) !== 0;
+    const shouldRebalance =
+      (m > 0 && checkRebalanceTrigger(strategy, m, months, assetCapital, targetWeights)) ||
+      (m > 0 && cashflowTriggersRebalance && hasCashflow);
+
+    if (shouldRebalance) {
       for (let a = 0; a < nAssets; a++) {
         assetCapital[a] = totalBefore * targetWeights[a];
       }

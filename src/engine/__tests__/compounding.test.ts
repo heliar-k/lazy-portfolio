@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { compoundPortfolio, expandCashflows } from '../compounding';
 import type { CashflowEvent } from '../types';
 
@@ -247,5 +247,156 @@ describe('compoundPortfolio', () => {
     expect(values[1]).toBe(0);
     expect(cashflowRequests[1]).toBe(-1500);
     expect(cashflowImpacts[1]).toBe(-1000);
+  });
+
+  describe('cashflowTriggersRebalance', () => {
+    it('force-rebalances to target weights on months with cashflow', () => {
+      // 4 months: STOCK drifts up significantly, BOND flat.
+      // Only month 3 has a deposit. Strategy is annual (won't trigger).
+      const months = Array.from({ length: 4 }, (_, i) => {
+        const d = new Date(2020, i, 1);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        return lastDay.toISOString().slice(0, 10);
+      });
+
+      // STOCK 10%/mo → drifts way above 60%
+      const returns: (number | null)[][] = [
+        [null, 0.10, 0.10, 0.10],
+        [null, 0.00, 0.00, 0.00],
+      ];
+
+      const cashflows = new Map<string, number>();
+      cashflows.set(months[2], 1000); // month 2 = March
+
+      const { values, effectiveWeights } = compoundPortfolio(
+        [0.6, 0.4],
+        returns,
+        10000,
+        cashflows,
+        months,
+        { type: 'calendar', frequency: 'annual' }, // no normal trigger here
+        true, // ★ cashflowTriggersRebalance = true
+      );
+
+      // Without force rebalance:
+      //   Month 0: stock=6000, bond=4000 (target)
+      //   Month 0 return: stock 0% (null→0), bond 0% → weights stay 60/40
+      //   Month 1: stock 6000*1.10=6600, bond 4000 → values=[10600], stock weight=0.623
+      //   Month 2: stock 6600*1.10=7260, bond 4000, +1000 at target → stock += 600, bond += 400
+      //            → values=[7860+4400=12260], stock weight entering month 3 = 7860/12260=0.641
+      //
+      // With force rebalance (cfRebalance=true):
+      //   Month 2 starts with: stock=6600, bond=4000, total=10600
+      //   Force rebalance BEFORE returns: stock=10600*0.6=6360, bond=10600*0.4=4240
+      //   Apply returns: stock=6360*1.10=6996, bond=4240
+      //   Apply cashflow at target: stock+=600, bond+=400
+      //   → values=[6996+600 + 4240+400 = 12236]
+
+      // effectiveWeights[2] (entering March, before rebalance+returns):
+      // Without force: 6600/10600=0.623
+      // With force: after rebalance = [0.6, 0.4]
+      expect(effectiveWeights[2][0]).toBeCloseTo(0.6);
+      expect(effectiveWeights[2][1]).toBeCloseTo(0.4);
+    });
+
+    it('does not rebalance on months without cashflow', () => {
+      const months = Array.from({ length: 4 }, (_, i) => {
+        const d = new Date(2020, i, 1);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        return lastDay.toISOString().slice(0, 10);
+      });
+
+      const returns: (number | null)[][] = [
+        [null, 0.10, 0.10, 0.10],
+        [null, 0.00, 0.00, 0.00],
+      ];
+
+      // Cashflow only in month 1 — other months should drift normally
+      const cashflows = new Map<string, number>();
+      cashflows.set(months[1], 500);
+
+      const { effectiveWeights } = compoundPortfolio(
+        [0.6, 0.4],
+        returns,
+        10000,
+        cashflows,
+        months,
+        { type: 'calendar', frequency: 'annual' },
+        true,
+      );
+
+      // Month 1: has cashflow → force rebalance → weights = [0.6, 0.4]
+      expect(effectiveWeights[1][0]).toBeCloseTo(0.6);
+      expect(effectiveWeights[1][0]).toBeCloseTo(0.6);
+
+      // Month 2: no cashflow, no normal trigger → drifted
+      expect(effectiveWeights[2][0]).toBeGreaterThan(0.6);
+    });
+
+    it('combines with normal rebalance trigger (both active)', () => {
+      // Monthly rebalance already rebalances every month.
+      // With cfRebalance=true, the behavior should be identical:
+      // every month already rebalances anyway.
+      const months = Array.from({ length: 4 }, (_, i) => {
+        const d = new Date(2020, i, 1);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        return lastDay.toISOString().slice(0, 10);
+      });
+
+      const returns: (number | null)[][] = [
+        [null, 0.05, 0.05, 0.05],
+        [null, 0.00, 0.00, 0.00],
+      ];
+
+      const cashflows = new Map<string, number>();
+      cashflows.set(months[1], 1000);
+
+      const result = compoundPortfolio(
+        [0.6, 0.4],
+        returns,
+        10000,
+        cashflows,
+        months,
+        { type: 'calendar', frequency: 'monthly' },
+        true,
+      );
+
+      // Every month still rebalanced to target
+      result.effectiveWeights.forEach((ew) => {
+        expect(ew[0]).toBeCloseTo(0.6);
+        expect(ew[1]).toBeCloseTo(0.4);
+      });
+    });
+
+    it('defaults to false (soft rebalance) when not passed', () => {
+      const months = Array.from({ length: 4 }, (_, i) => {
+        const d = new Date(2020, i, 1);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        return lastDay.toISOString().slice(0, 10);
+      });
+
+      const returns: (number | null)[][] = [
+        [null, 0.10, 0.10, 0.10],
+        [null, 0.00, 0.00, 0.00],
+      ];
+
+      // Deposit at month 2 — should NOT trigger rebalance (default=false)
+      const cashflows = new Map<string, number>();
+      cashflows.set(months[2], 1000);
+
+      const { effectiveWeights } = compoundPortfolio(
+        [0.6, 0.4],
+        returns,
+        10000,
+        cashflows,
+        months,
+        { type: 'calendar', frequency: 'annual' },
+        // no 7th arg → defaults to false
+      );
+
+      // Month 2: has cashflow but no force rebalance → should be drifted
+      expect(effectiveWeights[2][0]).toBeGreaterThan(0.6);
+      expect(effectiveWeights[2][0]).toBeLessThan(0.65);
+    });
   });
 });

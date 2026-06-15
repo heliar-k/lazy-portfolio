@@ -1,3 +1,8 @@
+import { compoundPortfolio, expandCashflows } from './compounding';
+import { alignFxRatesToGrid, convertReturnSeries } from './currency';
+import { adjustForInflation } from './inflation';
+import { computeAnnualReturns, computeMetrics } from './metrics';
+import { alignReturnsToGrid } from './returns';
 import type {
   BacktestParameters,
   BacktestResult,
@@ -6,11 +11,6 @@ import type {
   MonthlyTimeSeriesPoint,
   PortfolioHolding,
 } from './types';
-import { alignReturnsToGrid } from './returns';
-import { alignFxRatesToGrid, convertReturnSeries } from './currency';
-import { compoundPortfolio, expandCashflows } from './compounding';
-import { adjustForInflation } from './inflation';
-import { computeMetrics, computeAnnualReturns } from './metrics';
 
 /**
  * Run the full backtest pipeline:
@@ -90,6 +90,7 @@ export function runBacktest(
     cashflowSchedule,
     monthGrid,
     rebalancing,
+    params.cashflowTriggersRebalance,
   );
 
   // 5. Build monthly time series (nominal, with drawdown tracking)

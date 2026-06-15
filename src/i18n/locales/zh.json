@@ -37,6 +37,7 @@
     "noBenchmark": "— 无 —",
     "inflation": "通胀",
     "inflationAdjust": "通胀调整",
+    "cashflowTriggersRebalance": "现金流注入时再平衡",
     "paramsChanged": "参数已变更，结果可能不是最新的，请重新运行回测。",
     "noResults": "运行回测以查看结果",
     "dataAsOf": "数据截至 {{date}}",

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { runBacktest, buildMonthGrid } from '../backtest';
+import { describe, expect, it } from 'vitest';
+import { buildMonthGrid, runBacktest } from '../backtest';
 import type {
-  BacktestParameters,
-  MonthlyReturnPoint,
-  AssetIdentifier,
+    AssetIdentifier,
+    BacktestParameters,
+    MonthlyReturnPoint,
 } from '../types';
 
 function makeAsset(symbol: string, currency = 'USD'): AssetIdentifier {
@@ -440,5 +440,100 @@ describe('runBacktest', () => {
 
     expect(() => runBacktest(params, assetReturns, fxRates, new Map()))
       .toThrow('Missing return data for INTL at 2020-05-31 after backtest start');
+  });
+
+  describe('cashflowTriggersRebalance', () => {
+    it('force-rebalances on cashflow months, producing different results from soft rebalance', () => {
+      // 4 months (Jan–Apr 2020), STOCK drifts hard, BOND flat.
+      // Annual rebalance won't trigger. Deposit in March.
+      const params = makeParams({
+        startDate: '2020-01',
+        endDate: '2020-04',
+        inflationAdjusted: false,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        cashflows: [{ date: '2020-03-31', amount: 5000, type: 'deposit' }],
+      });
+
+      const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+      // STOCK: 0% first month (null→0 in compounding), then 10%/mo
+      assetReturns.set('STOCK', makeReturnSeries([0, 0.10, 0.10, 0.10]));
+      assetReturns.set('BOND', makeReturnSeries([0, 0.00, 0.00, 0.00]));
+
+      const softResult = runBacktest(
+        { ...params, cashflowTriggersRebalance: false },
+        assetReturns, new Map(), new Map(),
+      );
+
+      const forceResult = runBacktest(
+        { ...params, cashflowTriggersRebalance: true },
+        assetReturns, new Map(), new Map(),
+      );
+
+      // The two strategies should produce different final values
+      // because force rebalance sells stock to buy bond in March
+      expect(forceResult.metrics.finalCapital).not.toBe(softResult.metrics.finalCapital);
+
+      // With force rebalance, the portfolio stays closer to 60/40,
+      // so in a rising stock market the soft strategy (which lets
+      // stock drift higher) should end up with MORE capital.
+      expect(softResult.metrics.finalCapital).toBeGreaterThan(forceResult.metrics.finalCapital);
+    });
+
+    it('force-rebalances correctly in a declining market (diverges from soft)', () => {
+      // STOCK drops 10%/mo, BOND flat. Deposit in month 2.
+      const params = makeParams({
+        startDate: '2020-01',
+        endDate: '2020-04',
+        inflationAdjusted: false,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        cashflows: [{ date: '2020-03-31', amount: 5000, type: 'deposit' }],
+      });
+
+      const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+      assetReturns.set('STOCK', makeReturnSeries([0, -0.10, -0.10, -0.10]));
+      assetReturns.set('BOND', makeReturnSeries([0, 0.00, 0.00, 0.00]));
+
+      const softResult = runBacktest(
+        { ...params, cashflowTriggersRebalance: false },
+        assetReturns, new Map(), new Map(),
+      );
+      const forceResult = runBacktest(
+        { ...params, cashflowTriggersRebalance: true },
+        assetReturns, new Map(), new Map(),
+      );
+
+      // In a declining stock market, soft rebalance lets the portfolio
+      // drift bond-heavy (protective), while force rebalance buys more
+      // falling stock on every deposit. Both strategies differ meaningfully.
+      expect(forceResult.metrics.finalCapital).not.toBe(softResult.metrics.finalCapital);
+
+      // Force rebalance keeps stock weight closer to 60% on deposit months,
+      // so in a declining market it holds more stock → worse outcome.
+      expect(softResult.metrics.finalCapital).toBeGreaterThan(forceResult.metrics.finalCapital);
+    });
+
+    it('defaults to soft rebalance when flag is omitted', () => {
+      const params = makeParams({
+        startDate: '2020-01',
+        endDate: '2020-04',
+        inflationAdjusted: false,
+        rebalancing: { type: 'calendar', frequency: 'annual' },
+        cashflows: [{ date: '2020-03-31', amount: 5000, type: 'deposit' }],
+      });
+
+      // params does NOT have cashflowTriggersRebalance → should default to false
+      const assetReturns = new Map<string, MonthlyReturnPoint[]>();
+      assetReturns.set('STOCK', makeReturnSeries([0, 0.10, 0.10, 0.10]));
+      assetReturns.set('BOND', makeReturnSeries([0, 0.00, 0.00, 0.00]));
+
+      const defaultResult = runBacktest(params, assetReturns, new Map(), new Map());
+      const softResult = runBacktest(
+        { ...params, cashflowTriggersRebalance: false },
+        assetReturns, new Map(), new Map(),
+      );
+
+      // Default (undefined) should match explicit false
+      expect(defaultResult.metrics.finalCapital).toBe(softResult.metrics.finalCapital);
+    });
   });
 });

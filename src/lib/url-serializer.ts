@@ -1,11 +1,11 @@
 import type {
-  PortfolioDefinition,
-  BacktestParameters,
-  PortfolioHolding,
-  RebalancingStrategy,
-  DisplayCurrency,
-  Region,
-  CashflowEvent,
+    BacktestParameters,
+    CashflowEvent,
+    DisplayCurrency,
+    PortfolioDefinition,
+    PortfolioHolding,
+    RebalancingStrategy,
+    Region,
 } from '../engine/types';
 
 /**
@@ -85,6 +85,10 @@ export function serializeBacktestParams(
     sp.set('cashflows', serializeCashflows(params.cashflows));
   }
 
+  if (params.cashflowTriggersRebalance) {
+    sp.set('cfReb', '1');
+  }
+
   sp.set('v', '1'); // version tag
 
   return sp;
@@ -130,6 +134,9 @@ export function deserializeBacktestParams(
 
   const cashflows = sp.get('cashflows');
   if (cashflows) result.cashflows = deserializeCashflows(cashflows);
+
+  const cfReb = sp.get('cfReb');
+  result.cashflowTriggersRebalance = cfReb === '1';
 
   return result;
 }

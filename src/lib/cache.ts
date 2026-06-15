@@ -17,7 +17,8 @@ interface CacheEntry {
  */
 export function generateCacheKey(params: BacktestParameters, dataVersion: number): string {
   const { portfolio, startDate, endDate, initialCapital, displayCurrency,
-    inflationRegion, inflationAdjusted, rebalancing, cashflows } = params;
+    inflationRegion, inflationAdjusted, rebalancing, cashflows,
+    cashflowTriggersRebalance } = params;
 
   const holdingsKey = portfolio.holdings
     .map((h) => `${h.asset.symbol}:${h.targetWeight.toFixed(4)}`)
@@ -44,6 +45,7 @@ export function generateCacheKey(params: BacktestParameters, dataVersion: number
     String(inflationAdjusted),
     rebalanceKey,
     cashflowKey,
+    String(!!cashflowTriggersRebalance),
   ].join('|');
 }
 
