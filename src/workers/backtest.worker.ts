@@ -12,6 +12,7 @@ interface WorkerRequest {
   assetReturns: [string, MonthlyReturnPoint[]][];
   fxRates: [string, MonthlyFxRatePoint[]][];
   cpiSeries: [string, number][];
+  noRiskSeries: [string, number][];
 }
 
 interface WorkerResponse {
@@ -21,14 +22,15 @@ interface WorkerResponse {
 }
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-  const { id, params, assetReturns, fxRates, cpiSeries } = e.data;
+  const { id, params, assetReturns, fxRates, cpiSeries, noRiskSeries } = e.data;
 
   try {
     const assetReturnMap = new Map(assetReturns);
     const fxRatesMap = new Map(fxRates);
     const cpiMap = new Map(cpiSeries);
+    const noRiskMap = new Map(noRiskSeries);
 
-    const result = runBacktest(params, assetReturnMap, fxRatesMap, cpiMap);
+    const result = runBacktest(params, assetReturnMap, fxRatesMap, cpiMap, noRiskMap);
 
     const response: WorkerResponse = { id, result };
     self.postMessage(response);

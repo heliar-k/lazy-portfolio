@@ -9,9 +9,10 @@ interface DrawdownChartProps {
   timeSeries: MonthlyTimeSeriesPoint[];
   status: 'idle' | 'running' | 'ready' | 'error';
   brushWindow?: { start: string; end: string } | null;
+  inflationAdjusted: boolean;
 }
 
-export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChartProps) {
+export function DrawdownChart({ timeSeries, status, brushWindow, inflationAdjusted }: DrawdownChartProps) {
   const { t } = useTranslation();
 
   const option = useMemo(() => {
@@ -21,8 +22,8 @@ export function DrawdownChart({ timeSeries, status, brushWindow }: DrawdownChart
     if (!filtered || filtered.length === 0) return {};
 
     const dates = filtered.map((p) => p.date);
-    const drawdowns = filtered.map((p) => p.drawdown * 100);
-
+    const drawdowns = inflationAdjusted ? filtered.map((p) => p.drawdownRateReal * 100):filtered.map((p) => p.drawdownRate * 100);
+    
     // Find max drawdown period for marking
     let maxDD = 0;
     let maxDDStart = 0;

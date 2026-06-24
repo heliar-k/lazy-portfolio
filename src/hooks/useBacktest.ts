@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
+import { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates, resolveNoRiskBenefit } from '../data/proxy-registry';
 import { loadDataVersion } from '../data/loader';
 import { getCachedResult, setCachedResult } from '../lib/cache';
 import type { BacktestParameters, BacktestResult, MonthlyFxRatePoint } from '../engine/types';
@@ -78,6 +78,7 @@ export function useBacktest(): UseBacktestReturn {
       if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
       const cpiSeries = await resolveCpiSeries(params.inflationRegion);
+      const noRiskSeries = await resolveNoRiskBenefit(params.inflationRegion);
 
       if (abortRef.current || currentRequestId !== requestIdRef.current) return;
 
@@ -118,6 +119,7 @@ export function useBacktest(): UseBacktestReturn {
             assetReturns: Array.from(assetReturns.entries()),
             fxRates: Array.from(fxRates.entries()),
             cpiSeries: Array.from(cpiSeries.entries()),
+            noRiskSeries: Array.from(noRiskSeries.entries()),
           });
         });
 
@@ -137,6 +139,7 @@ export function useBacktest(): UseBacktestReturn {
           assetReturns,
           fxRates,
           cpiSeries,
+          noRiskSeries,
         );
 
         setResult(backtestResult);

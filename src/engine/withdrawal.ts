@@ -144,6 +144,7 @@ function simulateSinglePeriod(
   displayCurrency: DisplayCurrency,
   inflationRegion: Region,
   fxRates: Map<string, MonthlyFxRatePoint[]>,
+  noRiskSeries:  Map<string, number>,
 ): SinglePeriodResult {
   const endDate = addYears(startDate, retirementYears);
 
@@ -175,7 +176,7 @@ function simulateSinglePeriod(
   };
 
   // Run backtest (no FX conversion needed for single-currency portfolios)
-  const result = runBacktest(params, assetReturns, fxRates, cpiSeries);
+  const result = runBacktest(params, assetReturns, fxRates, cpiSeries, noRiskSeries);
 
   // Extract withdrawal-specific results
   const timeSeries = result.timeSeries;
@@ -279,6 +280,7 @@ export function computeSWR(
   holdings: PortfolioHolding[],
   assetReturns: Map<string, MonthlyReturnPoint[]>,
   cpiSeries: Map<string, number>,
+  noRiskSeries: Map<string, number>,
   options: {
     retirementYears: number;
     initialCapital: number;
@@ -321,6 +323,7 @@ export function computeSWR(
         displayCurrency,
         inflationRegion,
         fxRates,
+        noRiskSeries,
       );
 
       if (periodResult.success) { /* tracked in sweepResults below */ }

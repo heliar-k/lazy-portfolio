@@ -403,7 +403,8 @@ async function fetchGoldViaGLD(): Promise<{ date: string; price: number }[]> {
   try {
     const now = Math.floor(Date.now() / 1000);
     const from2004 = Math.floor(new Date('2004-11-01').getTime() / 1000);
-
+    // 1781625600
+    // https://query1.finance.yahoo.com/v8/finance/chart/GLD?interval=1mo&period1=961171200&period2=1781625600
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/GLD?interval=1mo&period1=${from2004}&period2=${now}`;
     const res = await undiciFetch(url, {
       headers: {

@@ -38,14 +38,15 @@ export function ResultsDashboard({ metrics, status }: ResultsDashboardProps) {
 
   const cards = [
     { label: t('metrics.finalCapital'), value: formatCurrency(metrics.finalCapital, 'USD', locale) },
-    { label: t('metrics.totalReturn'), value: formatPct(metrics.totalReturn, locale), positive: metrics.totalReturn >= 0 },
+    { label: t('metrics.totalReturn'), value: formatPct(metrics.twr, locale), positive: metrics.twr >= 0 },
     { label: t('metrics.cagr'), value: formatPct(metrics.cagr, locale), positive: metrics.cagr >= 0 },
     { label: t('metrics.stdDev'), value: formatPct(metrics.stdDevAnnualized, locale) },
-    { label: t('metrics.maxDrawdown'), value: formatPct(metrics.maxDrawdown, locale), positive: false },
+    { label: t('metrics.maxDrawdown'), value: formatPct(metrics.maxDrawdown, locale)+`(${metrics.maxDrawdownStart.substring(0,7).replace('-','.')}~${metrics.maxDrawdownEnd.substring(0,7).replace('-','.')}~${metrics.maxDrawdownRecovery.substring(0,7).replace('-','.')})`, positive: false ,fontSize: 'text-sl' },
     { label: t('metrics.sharpeRatio'), value: formatNumber(metrics.sharpeRatio, locale, 2) },
     { label: t('metrics.sortinoRatio'), value: formatNumber(metrics.sortinoRatio, locale, 2) },
     { label: t('metrics.bestYear'), value: formatPct(metrics.bestYear.return, locale) + ` (${metrics.bestYear.year})` },
     { label: t('metrics.worstYear'), value: formatPct(metrics.worstYear.return, locale) + ` (${metrics.worstYear.year})` },
+    { label: t('metrics.evl_date_range'), value: `${metrics.start_date.substring(0,7)} ~ ${metrics.end_date.substring(0,7)}`,fontSize: 'text-base' },
     { label: t('metrics.positiveMonths'), value: formatPct(metrics.positiveMonthsPct, locale) },
     {
       label: t('metrics.rolling3y'),
@@ -63,14 +64,14 @@ export function ResultsDashboard({ metrics, status }: ResultsDashboardProps) {
         {cards.map((card) => (
           <div key={card.label}>
             <div className="text-xs text-gray-500 mb-1">{card.label}</div>
-            <div
-              className={`text-lg font-semibold ${
+            <div 
+              className={`font-semibold ${
                 card.positive === undefined
                   ? 'text-gray-900'
                   : card.positive
                     ? 'text-green-600'
                     : 'text-red-500'
-              }`}
+              } ${card.fontSize || 'text-lg'}`}
             >
               {card.value}
             </div>

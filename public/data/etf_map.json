@@ -1256,5 +1256,85 @@
     "expenseRatio": 0.0006,
     "inceptionDate": "2007-07-25",
     "proxySymbol": "SPTL_BLENDED"
+  },
+  {
+    "symbol": "SPTL Yahoo",
+    "name": "SPDR Portfolio Long Term Treasury ETF(Yahoo Finance)",
+    "nameZh": "道富长期国债ETF(Yahoo Finance)",
+    "assetClass": "us_treasury_long",
+    "region": "US",
+    "currency": "USD",
+    "provider": "SPDR",
+    "expenseRatio": 0.0006,
+    "inceptionDate": "2007-07-25",
+    "proxySymbol": "SPTL_Yahoo"
+  },
+  {
+    "symbol": "GLDM Yahoo",
+    "name": "SPDR Gold MiniShares Trust(Yahoo Finance)",
+    "nameZh": "道富黄金迷你信托(Yahoo Finance)",
+    "assetClass": "gold",
+    "region": "GLOBAL",
+    "currency": "USD",
+    "provider": "SPDR",
+    "expenseRatio": 0.001,
+    "inceptionDate": "2018-06-25",
+    "proxySymbol": "GLDM_Yahoo"
+  },{
+    "symbol": "SGOV Yahoo",
+    "name": "iShares 0-3 Month Treasury Bond ETF(Yahoo Finance)",
+    "nameZh": "贝莱德0-3月国债ETF(Yahoo Finance)",
+    "assetClass": "us_cash",
+    "region": "US",
+    "currency": "USD",
+    "provider": "iShares",
+    "expenseRatio": 0.0007,
+    "inceptionDate": "2020-05-26",
+    "proxySymbol": "SGOV_Yahoo"
+  },{
+    "symbol": "VOO Yahoo",
+    "name": "Vanguard S&P 500 ETF(Yahoo Finance)",
+    "nameZh": "先锋标普500 ETF(Yahoo Finance)",
+    "assetClass": "us_large_cap",
+    "region": "US",
+    "currency": "USD",
+    "provider": "Vanguard",
+    "expenseRatio": 0.0003,
+    "inceptionDate": "2010-09-07",
+    "proxySymbol": "VOO_Yahoo"
+  },
+{
+    "symbol": "BIL Yahoo",
+    "name": "SPDR Bloomberg 1-3 Month T-Bill ETF(Yahoo Finance)",
+    "nameZh": "SPDR短期国债ETF(Yahoo Finance)",
+    "assetClass": "us_cash",
+    "region": "US",
+    "currency": "USD",
+    "provider": "State Street",
+    "expenseRatio": 0.0014,
+    "inceptionDate": "2007-05-25",
+    "proxySymbol": "BIL_Yahoo"
+  },{
+    "symbol": "TLT Yahoo",
+    "name": "iShares 20+ Year Treasury Bond ETF(Yahoo Finance)",
+    "nameZh": "iShares长期国债ETF(Yahoo Finance)",
+    "assetClass": "us_treasury_long",
+    "region": "US",
+    "currency": "USD",
+    "provider": "BlackRock",
+    "expenseRatio": 0.0015,
+    "inceptionDate": "2002-07-22",
+    "proxySymbol": "TLT_Yahoo"
+  },{
+    "symbol": "GLD Yahoo",
+    "name": "SPDR Gold Shares(Yahoo Finance)",
+    "nameZh": "SPDR黄金ETF(Yahoo Finance)",
+    "assetClass": "gold",
+    "region": "US",
+    "currency": "USD",
+    "provider": "State Street",
+    "expenseRatio": 0.004,
+    "inceptionDate": "2004-11-18",
+    "proxySymbol": "GLD_Yahoo"
   }
 ]

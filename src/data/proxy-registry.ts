@@ -3,6 +3,7 @@ import {
   loadProxySeries,
   loadCpiSeries,
   loadFxSeries,
+  loadNoRiskSeries,
 } from './loader';
 import { computeMonthlyReturns } from '../engine/returns';
 import type { EtfMapEntry } from './loader';
@@ -83,6 +84,20 @@ export async function resolveCpiSeries(
   // Normalize region to CPI file name
   const cpiRegion = region.toLowerCase();
   return loadCpiSeries(cpiRegion);
+}
+
+/**
+ * 
+ * @param fromCurrency 
+ * @param toCurrency 
+ * @returns 
+ */
+export async function resolveNoRiskBenefit(
+  region: string,
+): Promise<Map<string, number>>{
+  // Normalize region to CPI file name
+  const cpiRegion = region.toLowerCase();
+  return loadNoRiskSeries(cpiRegion);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { loadEtfMap, loadProxySeries, loadCpiSeries, loadFxSeries } from './data-loader';
+import { loadEtfMap, loadProxySeries, loadCpiSeries, loadFxSeries, loadNoRiskSeries} from './data-loader';
 import type { EtfMapEntry } from './data-loader';
 import { computeMonthlyReturns } from '../engine/returns';
 import type {
@@ -18,6 +18,7 @@ export function resolvePortfolioData(
   assetReturns: Map<string, MonthlyReturnPoint[]>;
   fxRates: Map<string, MonthlyFxRatePoint[]>;
   cpiSeries: Map<string, number>;
+  noRiskSeries: Map<string, number>;
 } {
   const etfMap = loadEtfMap(dataDir);
   const etfBySymbol = new Map<string, EtfMapEntry>(
@@ -58,5 +59,7 @@ export function resolvePortfolioData(
     ? loadCpiSeries(inflationRegion, dataDir)
     : new Map<string, number>();
 
-  return { assetReturns, fxRates, cpiSeries };
+  const noRiskSeries = loadNoRiskSeries(inflationRegion, dataDir);
+
+  return { assetReturns, fxRates, cpiSeries, noRiskSeries };
 }

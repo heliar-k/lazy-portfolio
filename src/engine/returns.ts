@@ -48,7 +48,7 @@ export function alignReturnsToGrid(
   // Build a lookup from date string to index
   const retByDate = new Map<string, MonthlyReturnPoint>();
   for (const r of sorted) {
-    retByDate.set(r.date, r);
+    retByDate.set(r.date.substring(0,7), r); //取每个月最后一天有数据的数据
   }
 
   const result: (number | null)[] = [];
@@ -57,7 +57,7 @@ export function alignReturnsToGrid(
 
   for (let i = 0; i < months.length; i++) {
     const m = months[i];
-    const point = retByDate.get(m);
+    const point = retByDate.get(m.substring(0,7));
 
     if (point) {
       result.push(point.totalReturn);

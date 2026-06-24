@@ -113,18 +113,19 @@ async function runSlotBacktest(
   }
 
   const { runBacktest } = await import('@/engine/backtest');
-  const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } = await import('@/data/proxy-registry');
+  const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates, resolveNoRiskBenefit } = await import('@/data/proxy-registry');
   const backtestParams: BacktestParameters = { ...params, portfolio };
   const assetReturns = await resolvePortfolioReturns(portfolio.holdings);
   const cpiSeries = await resolveCpiSeries(params.inflationRegion);
   const fxRates = new Map<string, import('@/engine/types').MonthlyFxRatePoint[]>();
+  const noRiskSeries = await resolveNoRiskBenefit(params.inflationRegion);
   for (const holding of portfolio.holdings) {
     if (holding.asset.currency !== params.displayCurrency) {
       const rates = await resolveFxRates(holding.asset.currency, params.displayCurrency);
       fxRates.set(`${holding.asset.currency}${params.displayCurrency}`, rates);
     }
   }
-  return runBacktest(backtestParams, assetReturns, fxRates, cpiSeries);
+  return runBacktest(backtestParams, assetReturns, fxRates, cpiSeries, noRiskSeries);
 }
 
 export function BacktestPage() {
@@ -278,7 +279,7 @@ export function BacktestPage() {
       />
 
       <div className="mt-4">
-        <CashflowEditor cashflows={params.cashflows} startDate={params.startDate} onChange={setCashflows} />
+        <CashflowEditor cashflows={params.cashflows} startDate={params.startDate} endDate={params.endDate} onChange={setCashflows} />
       </div>
 
       <div className="mt-4">
@@ -359,7 +360,7 @@ export function BacktestPage() {
             <MultiEquityChart series={allSeries} />
 
             {/* Individual charts for primary portfolio */}
-            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} inflationAdjusted={params.inflationAdjusted} />
             <AnnualReturnsChart result={result} status={status} brushWindow={brushWindow} />
             <RollingReturnsChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
           </>
@@ -372,7 +373,7 @@ export function BacktestPage() {
               status={status}
               onBrush={handleBrush}
             />
-            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
+            <DrawdownChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow}  inflationAdjusted={params.inflationAdjusted} />
             <AnnualReturnsChart result={result} status={status} brushWindow={brushWindow} />
             <RollingReturnsChart timeSeries={result?.timeSeries ?? []} status={status} brushWindow={brushWindow} />
             <ScatterChart metrics={result?.metrics ?? null} status={status} />

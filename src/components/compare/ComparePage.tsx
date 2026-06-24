@@ -154,11 +154,12 @@ export function ComparePage() {
           if (!portfolio) throw new Error('Portfolio not found');
 
           const { runBacktest } = await import('@/engine/backtest');
-          const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates } = await import('@/data/proxy-registry');
+          const { resolvePortfolioReturns, resolveCpiSeries, resolveFxRates, resolveNoRiskBenefit } = await import('@/data/proxy-registry');
 
           const backtestParams: BacktestParameters = { ...params, portfolio };
           const assetReturns = await resolvePortfolioReturns(backtestParams.portfolio.holdings);
           const cpiSeries = await resolveCpiSeries(backtestParams.inflationRegion);
+          const noRiskSeries = await resolveNoRiskBenefit(backtestParams.inflationRegion);
 
           const fxRates = new Map<string, import('@/engine/types').MonthlyFxRatePoint[]>();
           for (const holding of backtestParams.portfolio.holdings) {
@@ -168,7 +169,7 @@ export function ComparePage() {
             }
           }
 
-          result = runBacktest(backtestParams, assetReturns, fxRates, cpiSeries);
+          result = runBacktest(backtestParams, assetReturns, fxRates, cpiSeries, noRiskSeries);
         }
 
         newResults[i] = { name: newResults[i].name, result, status: 'ready' };
@@ -329,7 +330,7 @@ export function ComparePage() {
                 { label: t('metrics.sharpeRatio'), get: (r: BacktestResult) => formatNumber(r.metrics.sharpeRatio, locale, 2), color: () => 'text-gray-900' },
                 { label: t('metrics.stdDev'), get: (r: BacktestResult) => formatPct(r.metrics.stdDevAnnualized, locale), color: () => 'text-gray-900' },
                 { label: t('metrics.finalCapital'), get: (r: BacktestResult) => formatCurrency(r.metrics.finalCapital, 'USD', locale), color: () => 'text-gray-900' },
-                { label: t('metrics.totalReturn'), get: (r: BacktestResult) => formatPct(r.metrics.totalReturn, locale), color: (r: BacktestResult) => r.metrics.totalReturn >= 0 ? 'text-green-600' : 'text-red-500' },
+                { label: t('metrics.totalReturn'), get: (r: BacktestResult) => formatPct(r.metrics.twr, locale), color: (r: BacktestResult) => r.metrics.twr >= 0 ? 'text-green-600' : 'text-red-500' },
                 { label: t('metrics.bestYear'), get: (r: BacktestResult) => `${formatPct(r.metrics.bestYear.return, locale)} (${r.metrics.bestYear.year})`, color: () => 'text-green-600' },
                 { label: t('metrics.worstYear'), get: (r: BacktestResult) => `${formatPct(r.metrics.worstYear.return, locale)} (${r.metrics.worstYear.year})`, color: () => 'text-red-500' },
               ].map((row) => (

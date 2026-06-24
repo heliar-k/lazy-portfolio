@@ -12,6 +12,7 @@ interface RowState {
 interface CashflowEditorProps {
   cashflows: CashflowEvent[];
   startDate: string;
+  endDate: string;
   onChange: (cashflows: CashflowEvent[]) => void;
 }
 
@@ -37,7 +38,7 @@ function parseRow(cashflows: CashflowEvent[], freq: FreqType): RowState {
   };
 }
 
-export function CashflowEditor({ cashflows, startDate, onChange }: CashflowEditorProps) {
+export function CashflowEditor({ cashflows, startDate, endDate, onChange }: CashflowEditorProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -51,6 +52,8 @@ export function CashflowEditor({ cashflows, startDate, onChange }: CashflowEdito
   onChangeRef.current = onChange;
   const startDateRef = useRef(startDate);
   startDateRef.current = startDate;
+  const endDateRef = useRef(endDate);
+  endDateRef.current = endDate;
 
   useEffect(() => {
     const events: CashflowEvent[] = [];
@@ -62,7 +65,7 @@ export function CashflowEditor({ cashflows, startDate, onChange }: CashflowEdito
           date: toEndOfMonthDate(startDateRef.current),
           amount: row.type === 'withdrawal' ? -amt : amt,
           type: row.type,
-          recurring: { frequency: freq },
+          recurring: { frequency: freq , endDate: toEndOfMonthDate(endDateRef.current) },
         });
       }
     }

@@ -5,6 +5,7 @@ const BASE = '/data';
 // In-memory cache for loaded data
 const priceCache = new Map<string, MonthlyPricePoint[]>();
 const cpiCache = new Map<string, Map<string, number>>();
+const noRiskCache = new Map<string, Map<string, number>>();
 const fxCache = new Map<string, MonthlyFxRatePoint[]>();
 
 let etfMapCache: EtfMapEntry[] | null = null;
@@ -18,7 +19,7 @@ export interface EtfMapEntry {
   region: string;
   currency: string;
   provider: string;
-  expenseRatio: number;
+  expenseRatio: number; //费用率
   inceptionDate: string;
   proxySymbol: string;
 }
@@ -56,7 +57,7 @@ export async function loadProxySeries(proxySymbol: string): Promise<MonthlyPrice
   if (priceCache.has(key)) return priceCache.get(key)!;
 
   // Find the right subdirectory by checking common locations
-  const dirs = ['equity', 'bond', 'real_estate', 'commodity'];
+  const dirs = ['equity', 'bond', 'real_estate', 'commodity','yahoo_en'];
   let csv: string | null = null;
 
   for (const dir of dirs) {
@@ -95,6 +96,22 @@ export async function loadCpiSeries(region: string): Promise<Map<string, number>
   const csv = await res.text();
   const map = parseCpiCsv(csv);
   cpiCache.set(key, map);
+  return map;
+}
+
+export async function loadNoRiskSeries(region: string): Promise<Map<string, number>> {
+  const key = `${region}_norisk`;
+  if (noRiskCache.has(key)) return noRiskCache.get(key)!;
+
+  const url = `${BASE}/norisk/${key}.csv`;
+  const res = await fetch(url);
+  if (!res.ok || res.headers.get('content-type')?.includes('text/html')) {
+    return new Map();
+  }
+
+  const csv = await res.text();
+  const map = parseNoRiskCsv(csv);
+  noRiskCache.set(key, map);
   return map;
 }
 
@@ -138,6 +155,25 @@ function parsePriceCsv(csv: string): MonthlyPricePoint[] {
   }
 
   return points;
+}
+
+function parseNoRiskCsv(csv: string): Map<string, number> {
+  const lines = csv.trim().split('\n');
+  const map = new Map<string, number>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const [date, valueStr] = line.split(',');
+    const value = parseFloat(valueStr);
+
+    if (date && !isNaN(value)) {
+      map.set(date.substring(0,7), value);
+    }
+  }
+
+  return map;
 }
 
 /** Parse a CPI CSV string into Map<date, cpiValue>. */
