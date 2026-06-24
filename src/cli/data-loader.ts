@@ -59,6 +59,28 @@ export function loadCpiSeries(
   return map;
 }
 
+
+export function loadNoRiskSeries(
+  region: string,
+  dataDir = DEFAULT_DATA_DIR,
+): Map<string, number> {
+  const filePath = path.join(dataDir, 'norisk', `${region.toLowerCase()}_norisk.csv`);
+  if (!fs.existsSync(filePath)) return new Map();
+
+  const csv = fs.readFileSync(filePath, 'utf-8');
+  const lines = csv.trim().split('\n');
+  const map = new Map<string, number>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const [date, valueStr] = lines[i].split(',');
+    const value = parseFloat(valueStr);
+    if (date && !isNaN(value)) map.set(date.substring(0,7), value);
+  }
+
+  return map;
+}
+
+
 export function loadFxSeries(
   pair: string,
   dataDir = DEFAULT_DATA_DIR,

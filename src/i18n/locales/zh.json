@@ -93,12 +93,12 @@
     "band10": "10% 偏离调仓"
   },
   "metrics": {
-    "cagr": "年化收益率",
+    "cagr": "年化收益率(CAGR)",
     "maxDrawdown": "最大回撤",
     "sharpeRatio": "夏普比率",
     "sortinoRatio": "索提诺比率",
     "finalCapital": "最终资本",
-    "totalReturn": "总回报",
+    "totalReturn": "总回报(TWR)",
     "stdDev": "标准差",
     "bestYear": "最佳年份",
     "worstYear": "最差年份",
@@ -112,7 +112,8 @@
     "maxDrawdownDelta": "最大回撤差",
     "sharpeDelta": "夏普比率差",
     "finalCapitalDelta": "最终资本差",
-    "vs": "对比"
+    "vs": "对比",
+    "evl_date_range": "实际回测数据范围"
   },
   "compare": {
     "title": "组合对比",

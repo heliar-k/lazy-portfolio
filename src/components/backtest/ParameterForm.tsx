@@ -64,6 +64,7 @@ export function ParameterForm({
   const { t } = useTranslation();
   const [localCapital, setLocalCapital] = useState<string | null>(null);
 
+  
   const rebalanceOptions: { value: string; label: string; strategy: RebalancingStrategy }[] = [
     { value: 'monthly', label: t('rebalance.monthly'), strategy: { type: 'calendar', frequency: 'monthly' } },
     { value: 'quarterly', label: t('rebalance.quarterly'), strategy: { type: 'calendar', frequency: 'quarterly' } },

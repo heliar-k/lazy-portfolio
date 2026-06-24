@@ -135,25 +135,40 @@ export interface BacktestParameters {
 
 export interface MonthlyTimeSeriesPoint {
   date: string;
-  portfolioValue: number;
-  portfolioValueReal: number; // inflation-adjusted
-  monthlyReturn: number;
+  portfolioValue: number; // 总名义值
+  portfolioValueReal: number; // inflation-adjusted，真实购买力
+  assetValues: number[]; // 每个标的的名义价值，按照标的顺序
+  assetValuesReal: number[]; // 每个标的的真实价值，按照标的顺序
+  monthlyReturn: number; // 当月回报率，不考虑现金流
   monthlyReturnReal: number;
-  drawdown: number; // 0.0 to -1.0
-  cumulativeReturn: number;
+  assetmonthlyReturns: number[]; // 每个标的的月度收益率，按照标的顺序
+  assetmonthlyReturnsReal: number[]; // 每个标的的月度真实收益率，按照标的顺序
+  drawdownRate: number; // 0.0 to -1.0，不考虑现金流
+  drawdownRateReal: number;
+  twr: number; // twr
+  twrReal: number;
   cashflowImpact: number;
   cashflowRequested: number;
+  effectiveWeightsStart: number[]; //月初比例
+  effectiveWeightsEnd: number[];//月末比例
+  cpiRatio: number; // baseCpi / currentCpi, 用于计算通胀调整后的数值
+  noRiskBenefit: number;
+  noRiskBenefitReal: number;
+
 }
 
 export interface BacktestMetrics {
+  // Base 
+  start_date: string;
+  end_date: string;
   // Core
   finalCapital: number;
-  totalReturn: number;
+  twr: number;
   cagr: number;
   stdDevAnnualized: number;
-  bestYear: { year: number; return: number };
+  bestYear: { year: number; return: number }; // TWR，不考虑现金流
   worstYear: { year: number; return: number };
-
+  
   // Risk
   maxDrawdown: number;
   maxDrawdownStart: string;

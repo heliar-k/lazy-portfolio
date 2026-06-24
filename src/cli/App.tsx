@@ -408,7 +408,7 @@ export default function App() {
         const allResults: { name: string; result: BacktestResult }[] = [];
 
         for (const p of selectedPortfolios) {
-          const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
+          const { assetReturns, fxRates, cpiSeries , noRiskSeries} = resolvePortfolioData(
             p.holdings, currency, region, inflation,
           );
           const params: BacktestParameters = {
@@ -421,7 +421,7 @@ export default function App() {
             cashflowTriggersRebalance: cfRebalance,
             cashflows: [],
           };
-          allResults.push({ name: p.name, result: runBacktest(params, assetReturns, fxRates, cpiSeries) });
+          allResults.push({ name: p.name, result: runBacktest(params, assetReturns, fxRates, cpiSeries, noRiskSeries) });
         }
 
         setResults(allResults);
@@ -448,11 +448,11 @@ export default function App() {
     setTimeout(() => {
       try {
         const region = CURRENCY_REGION[currency] ?? 'US';
-        const { assetReturns, fxRates, cpiSeries } = resolvePortfolioData(
+        const { assetReturns, fxRates, cpiSeries, noRiskSeries} = resolvePortfolioData(
           portfolio.holdings, currency, region, true,
         );
         const years = parseInt(retirementYears) || 30;
-        const r = computeSWR(portfolio.holdings, assetReturns, cpiSeries, {
+        const r = computeSWR(portfolio.holdings, assetReturns, cpiSeries, noRiskSeries, {
           retirementYears: years,
           initialCapital: parseFloat(capital) || 10000,
           rebalancing: parseRebalancing(rebalancing),

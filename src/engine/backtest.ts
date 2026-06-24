@@ -25,6 +25,7 @@ export function runBacktest(
   assetReturnSeries: Map<string, MonthlyReturnPoint[]>,
   fxRates: Map<string, MonthlyFxRatePoint[]>,
   cpiSeries: Map<string, number>,
+  noRiskSeries: Map<string, number>,
 ): BacktestResult {
   const {
     portfolio,
@@ -38,9 +39,10 @@ export function runBacktest(
   const holdings = portfolio.holdings;
 
   // 1. Build month grid
+  // 月份列表
   let monthGrid = buildMonthGrid(startDate, endDate);
   const nMonths = monthGrid.length;
-
+  console.log(`Backtest period: ${startDate} to ${endDate} (${nMonths} months)`);
   if (nMonths === 0 || holdings.length === 0) {
     return emptyResult(params);
   }
@@ -49,8 +51,10 @@ export function runBacktest(
   let alignedReturns: (number | null)[][] = [];
   for (const holding of holdings) {
     const native = assetReturnSeries.get(holding.asset.symbol) ?? [];
+    // 每个月的回报率列表，按照month的顺序，依次放入 aligned
+    // 对没有数据月份，使用最近3个月的数据补全，否则置空
     let aligned = alignReturnsToGrid(native, monthGrid);
-
+    // 币种处理。如果展示币种与标的不同 且存在对应的汇率转换，则进行汇率转换。
     if (holding.asset.currency !== displayCurrency) {
       const pair = `${holding.asset.currency}${displayCurrency}`;
       const fx = fxRates.get(pair);
@@ -59,11 +63,17 @@ export function runBacktest(
         aligned = convertReturnSeries(aligned, alignedFx);
       }
     }
-
+    // alignedReturns存放了查询时间范围内不同标的的月回报率列表
+    // [ [148],[148],[],...]
+    // 对于数据不全的，空白位置是null，大家都是相同时间尺度上的。
     alignedReturns.push(aligned);
   }
 
+  console.log(`Aligned returns for ${holdings.length} holdings to ${monthGrid.length} months`);
+  
+  
   const effectiveStartIdx = findEffectiveStartIndex(alignedReturns);
+  console.log(`Effective start index: ${effectiveStartIdx} (${monthGrid[effectiveStartIdx]})`);
   if (effectiveStartIdx < 0) {
     throw new Error('No overlapping return data for all holdings in the requested date range');
   }
@@ -73,17 +83,27 @@ export function runBacktest(
     alignedReturns = alignedReturns.map((series) => series.slice(effectiveStartIdx));
   }
 
+  console.log(`Effective backtest start: ${monthGrid[0]} (${monthGrid.length} months)`);
+  // 检查没有缺失的数据
   assertNoMissingReturnsAfterStart(alignedReturns, monthGrid, holdings);
 
   // 3. Expand recurring cashflows
+  // 存入 是正的， 取出 是负的。
+  // cashflowSchedule 是一个 Map，key是月份，value是当月的现金流量（正负）
   const cashflowSchedule = expandCashflows(cashflows);
 
   // 4. Compound portfolio with per-asset tracking.
   //    Rebalancing is applied according to the strategy.
   //    Cashflows are invested at target weights so new money is split
   //    proportionally rather than following the drifted allocation.
+  // 权重list，按照 holding的顺序
+  // values 是每个月底的总资产价值列表，list
+  // cashflowImpacts 是每个月现金流对资产的实际影响（考虑了取款时的资金不足情况）
+  // cashflowRequests 是每个月设计的现金流（正数为存入，负数为取出）
+  // effectiveWeights 是每个月底实际的权重（考虑了再平衡和现金流后的结果）
   const targetWeights = holdings.map((h) => h.targetWeight);
-  const { values, cashflowImpacts, cashflowRequests, effectiveWeights } = compoundPortfolio(
+  //const { values, cashflowImpacts, cashflowRequests, effectiveWeights, timeSeries } = compoundPortfolio(
+  const timeSeries = compoundPortfolio(
     targetWeights,
     alignedReturns,
     initialCapital,
@@ -91,44 +111,50 @@ export function runBacktest(
     monthGrid,
     rebalancing,
     params.cashflowTriggersRebalance,
+    cpiSeries,
+    noRiskSeries,
   );
 
   // 5. Build monthly time series (nominal, with drawdown tracking)
-  let timeSeries = buildTimeSeries(
-    monthGrid,
-    values,
-    cashflowImpacts,
-    cashflowRequests,
-    alignedReturns,
-    effectiveWeights,
-    holdings,
-    initialCapital,
-  );
+  //let timeSeries = buildTimeSeries(
+  //  monthGrid,
+  //  values,
+  //  cashflowImpacts,
+  //  cashflowRequests,
+  //  alignedReturns,
+  //  effectiveWeights,
+  //  holdings,
+  //  initialCapital,
+  //);
 
+  //console.log(`Computed time series for ${timeSeries.length} months`);
   // 7. Inflation adjustment
-  if (params.inflationAdjusted) {
-    timeSeries = adjustForInflation(timeSeries, cpiSeries);
+  // 打印 inflationadjustment 相关信息
+  //console.log('CPI Series for region:', params.inflationRegion);
+  //if (params.inflationAdjusted) {
+  //  timeSeries = adjustForInflation(timeSeries, cpiSeries);
+  //  console.log('CPI Series for region:', params.inflationRegion);
     // Swap nominal ↔ real so metrics/charts use inflation-adjusted values.
     // Nominal values are preserved in the *Real fields for reference.
-    for (const point of timeSeries) {
-      [point.portfolioValue, point.portfolioValueReal] = [point.portfolioValueReal, point.portfolioValue];
-      [point.monthlyReturn, point.monthlyReturnReal] = [point.monthlyReturnReal, point.monthlyReturn];
-    }
-    timeSeries = recomputePathDerivedFields(timeSeries, initialCapital);
-  }
+  //  for (const point of timeSeries) {
+  //    [point.portfolioValue, point.portfolioValueReal] = [point.portfolioValueReal, point.portfolioValue];
+  //    [point.monthlyReturn, point.monthlyReturnReal] = [point.monthlyReturnReal, point.monthlyReturn];
+  //  }
+  //  timeSeries = recomputePathDerivedFields(timeSeries, initialCapital);
+  //}
 
   // 8. Compute summary metrics
-  const metrics = computeMetrics(timeSeries, initialCapital);
+  const {btMetric, annualReturns,monthlyReturnsDistribution} = computeMetrics(timeSeries, initialCapital, params.inflationAdjusted);
 
-  // 9. Annual returns
-  const annualReturns = computeAnnualReturns(timeSeries);
+  // 9. Annual returns。 TWR
+  //const annualReturns = computeAnnualReturns(timeSeries);
 
   // 10. Monthly return distribution
-  const monthlyReturnsDistribution = computeReturnDistribution(timeSeries);
+  //const monthlyReturnsDistribution = computeReturnDistribution(timeSeries);
 
   return {
     parameters: params,
-    metrics,
+    metrics: btMetric,
     timeSeries,
     annualReturns,
     monthlyReturnsDistribution,

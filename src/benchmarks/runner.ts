@@ -3,7 +3,7 @@ import type { BenchmarkDefinition } from '../engine/types';
 import { loadProxySeries } from '../data/loader';
 import { computeMonthlyReturns } from '../engine/returns';
 import { runBacktest } from '../engine/backtest';
-import { resolveCpiSeries, resolveFxRates } from '../data/proxy-registry';
+import { resolveCpiSeries, resolveFxRates, resolveNoRiskBenefit } from '../data/proxy-registry';
 
 /**
  * Run a backtest for a benchmark definition using the same parameters
@@ -24,6 +24,7 @@ export async function runBenchmarkBacktest(
 
   // Load CPI and FX data
   const cpiSeries = await resolveCpiSeries(params.inflationRegion);
+  const noRiskSeries = await resolveNoRiskBenefit(params.inflationRegion);
 
   const fxRates = new Map<string, MonthlyFxRatePoint[]>();
   // Benchmarks are always USD-nominated
@@ -55,5 +56,5 @@ export async function runBenchmarkBacktest(
     },
   };
 
-  return runBacktest(benchmarkParams, assetReturns, fxRates, cpiSeries);
+  return runBacktest(benchmarkParams, assetReturns, fxRates, cpiSeries, noRiskSeries);
 }
